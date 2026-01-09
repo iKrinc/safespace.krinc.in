@@ -17,6 +17,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [iframeKey, setIframeKey] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
+  const [iframeLoading, setIframeLoading] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
@@ -56,7 +57,12 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
   };
 
   const handleReload = () => {
+    setIframeLoading(true);
     setIframeKey((prev) => prev + 1);
+  };
+
+  const handleIframeLoad = () => {
+    setIframeLoading(false);
   };
 
   const handleOpenInNewTab = () => {
@@ -360,34 +366,17 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
         </div>
 
         {/* Preview Content */}
-        <div className="bg-neutral-100">
+        <div className="bg-terminal-400">
           {isLoading ? (
             <div
-              className="flex items-center justify-center bg-neutral-50"
+              className="flex items-center justify-center bg-terminal-400"
               style={{ height: typeof dimensions.height === 'number' ? `${dimensions.height}px` : dimensions.height }}
             >
-              <div className="text-center space-y-4 px-4">
-                <svg
-                  className="animate-spin h-12 w-12 text-neutral-600 mx-auto"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                <p className="text-neutral-600 font-medium">Loading preview...</p>
+              <div className="text-center space-y-3 px-4">
+                <div className="font-mono text-cyber-500 text-sm animate-pulse">
+                  <div className="mb-2">[███████████{'>'} ]</div>
+                  <div>loading screenshot...</div>
+                </div>
               </div>
             </div>
           ) : screenshot?.success && screenshot.screenshot ? (
@@ -399,11 +388,11 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
               />
             </div>
           ) : useIframe ? (
-            <div className="p-2 md:p-4 flex justify-center items-start bg-neutral-100 min-h-[400px]">
+            <div className="p-2 md:p-4 flex justify-center items-start bg-terminal-400 min-h-[400px] relative">
               {viewMode === 'mobile' ? (
-                // Mobile View with Device Frame - FIXED with no white space
+                // Mobile View with Device Frame
                 <div
-                  className="relative bg-neutral-900 shadow-2xl overflow-hidden mx-auto"
+                  className="relative bg-terminal-300 shadow-2xl overflow-hidden mx-auto border border-cyber-600"
                   style={{
                     width: '295px',
                     height: '603px',
@@ -412,24 +401,33 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                   }}
                 >
                   {/* Notch */}
-                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-neutral-900 rounded-b-3xl z-10"></div>
+                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-terminal-300 rounded-b-3xl z-10"></div>
 
                   {/* Screen - perfectly matches frame with no overflow */}
                   <div
-                    className="relative bg-white rounded-3xl overflow-hidden"
+                    className="relative bg-terminal-400 rounded-3xl overflow-hidden"
                     style={{
                       width: '271px', // 295 - 24 (12px padding on each side)
                       height: '579px', // 603 - 24 (12px padding on each side)
                     }}
                   >
+                    {iframeLoading && (
+                      <div className="absolute inset-0 bg-terminal-400 flex items-center justify-center z-20">
+                        <div className="font-mono text-cyber-500 text-xs animate-pulse">
+                          <div className="mb-1">[████{'>'} ]</div>
+                          <div>loading...</div>
+                        </div>
+                      </div>
+                    )}
                     <iframe
                       key={iframeKey}
                       ref={iframeRef}
                       src={url}
                       sandbox="allow-same-origin allow-scripts allow-forms"
-                      className="border-0"
+                      className="border-0 bg-white"
                       title="Safe preview"
                       referrerPolicy="no-referrer"
+                      onLoad={handleIframeLoad}
                       style={{
                         width: '375px',
                         height: '812px',
@@ -441,40 +439,42 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                 </div>
               ) : (
                 // Desktop View
-                <div className="w-full bg-white rounded-lg shadow-lg overflow-hidden">
+                <div className="w-full bg-terminal-400 rounded-sm border border-cyber-600 overflow-hidden relative">
+                  {iframeLoading && (
+                    <div
+                      className="absolute inset-0 bg-terminal-400 flex items-center justify-center z-20"
+                      style={{ height: `${dimensions.height}px` }}
+                    >
+                      <div className="font-mono text-cyber-500 text-sm animate-pulse">
+                        <div className="mb-2">[███████████{'>'} ]</div>
+                        <div>loading preview...</div>
+                      </div>
+                    </div>
+                  )}
                   <iframe
                     key={iframeKey}
                     ref={iframeRef}
                     src={url}
                     sandbox="allow-same-origin allow-scripts allow-forms"
-                    className="w-full border-0"
+                    className="w-full border-0 bg-white"
                     style={{ height: `${dimensions.height}px` }}
                     title="Safe preview"
                     referrerPolicy="no-referrer"
+                    onLoad={handleIframeLoad}
                   />
                 </div>
               )}
             </div>
           ) : (
             <div
-              className="flex items-center justify-center bg-neutral-50"
+              className="flex items-center justify-center bg-terminal-400"
               style={{ height: typeof dimensions.height === 'number' ? `${dimensions.height}px` : dimensions.height }}
             >
               <div className="text-center space-y-2 px-4">
-                <svg
-                  className="w-12 h-12 text-neutral-400 mx-auto"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-                <p className="text-neutral-600 font-medium">Preview not available</p>
-                <p className="text-neutral-500 text-sm">
-                  {screenshot?.error || 'Unable to load preview'}
+                <div className="text-danger-500 font-mono text-2xl mb-2">[X]</div>
+                <p className="text-gray-100 font-mono text-sm font-bold">preview not available</p>
+                <p className="text-gray-400 font-mono text-xs">
+                  {screenshot?.error || 'unable to load preview'}
                 </p>
               </div>
             </div>
