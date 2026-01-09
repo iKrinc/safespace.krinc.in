@@ -1,0 +1,37 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark background -->
+  <rect width="512" height="512" fill="#0a0f0a"/>
+
+  <!-- Shield outline with subdued green -->
+  <path
+    d="M256 48L96 128v128c0 88.4 71.6 160 160 160s160-71.6 160-160V128L256 48z"
+    fill="none"
+    stroke="#00b347"
+    stroke-width="24"
+  />
+
+  <!-- Inner shield detail -->
+  <path
+    d="M256 96L136 156v100c0 66.3 53.7 120 120 120s120-53.7 120-120V156L256 96z"
+    fill="none"
+    stroke="#00b347"
+    stroke-width="16"
+    opacity="0.5"
+  />
+
+  <!-- Checkmark in center -->
+  <path
+    d="M196 256l40 40 80-80"
+    fill="none"
+    stroke="#00b347"
+    stroke-width="24"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <!-- Small accent lines for tech feel -->
+  <line x1="156" y1="180" x2="176" y2="180" stroke="#00b347" stroke-width="4"/>
+  <line x1="336" y1="180" x2="356" y2="180" stroke="#00b347" stroke-width="4"/>
+  <line x1="156" y1="320" x2="176" y2="320" stroke="#00b347" stroke-width="4"/>
+  <line x1="336" y1="320" x2="356" y2="320" stroke="#00b347" stroke-width="4"/>
+</svg>
