@@ -129,7 +129,7 @@ async function processHTMLContent(html: string, baseUrl: string): Promise<string
     }
 
     // Process all image-related attributes and tags
-    processedHtml = processedHtml.replace(/<img([^>]*)>/gi, (match, imgAttributes) => {
+    processedHtml = processedHtml.replace(/<img([^>]*)>/gi, (_match, imgAttributes) => {
       let processedAttributes = imgAttributes;
 
       // Process src attribute
@@ -150,7 +150,7 @@ async function processHTMLContent(html: string, baseUrl: string): Promise<string
       // Process srcset attribute
       processedAttributes = processedAttributes.replace(
         /\ssrcset=["']([^"']+)["']/gi,
-        (srcsetMatch: any, srcset: string) => {
+        (_srcsetMatch: any, srcset: string) => {
           const processedSrcset = srcset
             .split(',')
             .map((srcsetItem: string) => {
@@ -198,13 +198,13 @@ async function processHTMLContent(html: string, baseUrl: string): Promise<string
     });
 
     // Process source tags within picture elements
-    processedHtml = processedHtml.replace(/<source([^>]*)>/gi, (match, sourceAttributes) => {
+    processedHtml = processedHtml.replace(/<source([^>]*)>/gi, (_match, sourceAttributes) => {
       let processedAttributes = sourceAttributes;
 
       // Process srcset attribute in source tags
       processedAttributes = processedAttributes.replace(
         /\ssrcset=["']([^"']+)["']/gi,
-        (srcsetMatch: any, srcset: string) => {
+        (_srcsetMatch: any, srcset: string) => {
           const processedSrcset = srcset
             .split(',')
             .map((srcsetItem: string) => {
@@ -246,7 +246,7 @@ async function processHTMLContent(html: string, baseUrl: string): Promise<string
     });
 
     // Process video poster attributes
-    processedHtml = processedHtml.replace(/<video([^>]*)>/gi, (match, videoAttributes) => {
+    processedHtml = processedHtml.replace(/<video([^>]*)>/gi, (_match, videoAttributes) => {
       let processedAttributes = videoAttributes;
 
       processedAttributes = processedAttributes.replace(
