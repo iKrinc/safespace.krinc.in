@@ -8,7 +8,7 @@ Allow: /
 Crawl-delay: 1
 
 # Sitemap location
-Sitemap: https://safespace.com/sitemap.xml
+Sitemap: https://safespace.krinc.in/sitemap.xml
 
 # Specific rules for common bots
 User-agent: Googlebot
