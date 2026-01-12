@@ -6,7 +6,14 @@ export function validateURL(urlString: string): {
   error?: string;
 } {
   try {
-    const url = new URL(urlString);
+    // Handle protocol-less URLs (like localhost:3000)
+    let normalizedUrl = urlString;
+    if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
+      // Try HTTPS first, then HTTP as fallback
+      normalizedUrl = `https://${urlString}`;
+    }
+
+    const url = new URL(normalizedUrl);
 
     if (!['http:', 'https:'].includes(url.protocol)) {
       return {
@@ -48,8 +55,8 @@ export function checkSuspiciousPatterns(url: URL): SecurityCheck {
   const hostname = url.hostname.toLowerCase();
   const fullUrl = url.href.toLowerCase();
 
-  const hasSuspiciousPattern = suspiciousPatterns.some((pattern) =>
-    pattern.test(hostname) || pattern.test(fullUrl)
+  const hasSuspiciousPattern = suspiciousPatterns.some(
+    (pattern) => pattern.test(hostname) || pattern.test(fullUrl)
   );
 
   // Check for excessive subdomains (more than 3)
@@ -73,13 +80,19 @@ export function checkDomain(url: URL): SecurityCheck {
 
   // List of suspicious TLDs commonly used in phishing
   const suspiciousTLDs = [
-    '.tk', '.ml', '.ga', '.cf', '.gq', // Free TLDs
-    '.xyz', '.top', '.work', '.click', '.link', // Often abused
+    '.tk',
+    '.ml',
+    '.ga',
+    '.cf',
+    '.gq', // Free TLDs
+    '.xyz',
+    '.top',
+    '.work',
+    '.click',
+    '.link', // Often abused
   ];
 
-  const hasSuspiciousTLD = suspiciousTLDs.some((tld) =>
-    hostname.endsWith(tld)
-  );
+  const hasSuspiciousTLD = suspiciousTLDs.some((tld) => hostname.endsWith(tld));
 
   // Check for numbers in domain (often used in phishing)
   const hasNumbersInDomain = /\d/.test(hostname.split('.')[0]);
@@ -111,19 +124,21 @@ export function analyzeDomainAge(url: URL): SecurityCheck {
 
   // Well-known domains are considered "old" and trustworthy
   const wellKnownDomains = [
-    'google.com', 'microsoft.com', 'apple.com', 'amazon.com',
-    'facebook.com', 'twitter.com', 'github.com', 'stackoverflow.com',
+    'google.com',
+    'microsoft.com',
+    'apple.com',
+    'amazon.com',
+    'facebook.com',
+    'twitter.com',
+    'github.com',
+    'stackoverflow.com',
   ];
 
-  const isWellKnown = wellKnownDomains.some((domain) =>
-    hostname.endsWith(domain)
-  );
+  const isWellKnown = wellKnownDomains.some((domain) => hostname.endsWith(domain));
 
   // For demo: assume .com, .org, .edu are older; newer TLDs are younger
   const establishedTLDs = ['.com', '.org', '.edu', '.gov', '.net'];
-  const hasEstablishedTLD = establishedTLDs.some((tld) =>
-    hostname.endsWith(tld)
-  );
+  const hasEstablishedTLD = establishedTLDs.some((tld) => hostname.endsWith(tld));
 
   const passed = isWellKnown || hasEstablishedTLD;
 
@@ -133,8 +148,8 @@ export function analyzeDomainAge(url: URL): SecurityCheck {
     message: isWellKnown
       ? 'Domain is well-established and widely recognized'
       : hasEstablishedTLD
-      ? 'Domain uses an established TLD, likely older than 1 year'
-      : 'Domain may be recently registered (higher risk for phishing)',
+        ? 'Domain uses an established TLD, likely older than 1 year'
+        : 'Domain may be recently registered (higher risk for phishing)',
     severity: passed ? 'low' : 'medium',
   };
 }

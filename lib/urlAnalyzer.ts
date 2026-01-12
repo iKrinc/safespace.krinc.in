@@ -8,6 +8,7 @@ import {
   checkURLLength,
   checkSpecialCharacters,
 } from './securityChecks';
+import { checkContentAvailability } from './proxyFetch';
 
 export async function analyzeURL(urlString: string): Promise<URLAnalysisResponse> {
   const timestamp = new Date().toISOString();
@@ -60,6 +61,30 @@ export async function analyzeURL(urlString: string): Promise<URLAnalysisResponse
   // Step 5: Determine if preview is safe
   const canPreview = safetyLevel !== SafetyLevel.DANGEROUS;
 
+  // Step 6: Check proxy availability for content fetching
+  let proxyAvailable = false;
+  let proxyError: string | undefined;
+  let workingMethod: string | undefined;
+  let triedVariants: string[] = [];
+
+  if (canPreview) {
+    const proxyCheck = await checkContentAvailability(url.href);
+    proxyAvailable = proxyCheck.available;
+    proxyError = proxyCheck.error;
+    workingMethod = proxyCheck.workingMethod;
+
+    // Extract tried variants from error message
+    if (proxyCheck.error) {
+      const variantMatch = proxyCheck.error.match(/Tried: (.+)/);
+      if (variantMatch) {
+        triedVariants = variantMatch[1].split('; ').map((v) => {
+          const methodMatch = v.match(/(direct|proxy)\(([^)]+)\)/);
+          return methodMatch ? `${methodMatch[1]}: ${methodMatch[2]}` : v;
+        });
+      }
+    }
+  }
+
   return {
     url: url.href,
     safetyLevel,
@@ -68,6 +93,10 @@ export async function analyzeURL(urlString: string): Promise<URLAnalysisResponse
     explanation,
     timestamp,
     canPreview,
+    proxyAvailable,
+    proxyError,
+    workingMethod,
+    triedVariants,
   };
 }
 
@@ -107,9 +136,7 @@ function calculateSafetyScore(checks: SecurityCheck[]): {
   }
 
   // Additional rule: If any high-severity check fails, mark as DANGEROUS
-  const highSeverityFailed = checks.some(
-    (check) => check.severity === 'high' && !check.passed
-  );
+  const highSeverityFailed = checks.some((check) => check.severity === 'high' && !check.passed);
   if (highSeverityFailed && safetyLevel === SafetyLevel.SUSPICIOUS) {
     safetyLevel = SafetyLevel.DANGEROUS;
   }
@@ -117,10 +144,7 @@ function calculateSafetyScore(checks: SecurityCheck[]): {
   return { safetyLevel, score };
 }
 
-function generateExplanation(
-  safetyLevel: SafetyLevel,
-  checks: SecurityCheck[]
-): string {
+function generateExplanation(safetyLevel: SafetyLevel, checks: SecurityCheck[]): string {
   const failedChecks = checks.filter((check) => !check.passed);
 
   switch (safetyLevel) {
@@ -135,7 +159,9 @@ function generateExplanation(
         failedChecks.length > 1 ? 's' : ''
       }: ${failedChecks
         .map((c) => c.name)
-        .join(', ')}. Proceed with caution and verify the source before interacting with this website.`;
+        .join(
+          ', '
+        )}. Proceed with caution and verify the source before interacting with this website.`;
 
     case SafetyLevel.DANGEROUS:
       if (failedChecks.length === 0) {

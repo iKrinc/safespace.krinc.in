@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { ScreenshotResponse } from '@/types';
+import { PreviewResponse } from '@/types';
 
 interface SafePreviewProps {
   url: string;
@@ -11,7 +11,7 @@ interface SafePreviewProps {
 type ViewMode = 'desktop' | 'mobile';
 
 export default function SafePreview({ url, canPreview }: SafePreviewProps) {
-  const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
+  const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [useIframe, setUseIframe] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('desktop');
@@ -22,7 +22,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
 
   useEffect(() => {
     if (canPreview) {
-      fetchScreenshot();
+      fetchPreview();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, canPreview]);
@@ -33,23 +33,23 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
     setViewMode(isMobile ? 'mobile' : 'desktop');
   }, []);
 
-  const fetchScreenshot = async () => {
+  const fetchPreview = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/screenshot', {
+      const response = await fetch('/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
 
-      const data: ScreenshotResponse = await response.json();
-      setScreenshot(data);
+      const data: PreviewResponse = await response.json();
+      setPreview(data);
 
       if (!data.success) {
         setUseIframe(true);
       }
     } catch (error) {
-      console.error('Failed to fetch screenshot:', error);
+      console.error('Failed to fetch preview:', error);
       setUseIframe(true);
     } finally {
       setIsLoading(false);
@@ -98,8 +98,8 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                 preview not available
               </h3>
               <p className="text-gray-100 text-xs font-mono">
-                {'>'} this URL has been flagged as potentially dangerous. preview has been
-                disabled for your protection.
+                {`>`} this URL has been flagged as potentially dangerous. preview has been disabled
+                for your protection.
               </p>
             </div>
           </div>
@@ -116,18 +116,22 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
       {showWarningModal && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
           <div className="bg-terminal-300 border border-warning-500 max-w-md w-full relative animate-fadeIn">
-            {/* Corner X Close Button */}
-            <button
-              onClick={() => setShowWarningModal(false)}
-              className="absolute top-2 right-2 text-gray-400 hover:text-warning-500 transition-colors z-10"
-              aria-label="Close"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            {/* Modal Content */}
+            <div className="p-4">
+              <button
+                onClick={() => setShowWarningModal(false)}
+                className="absolute top-2 right-2 text-gray-400 hover:text-warning-500 transition-colors z-10"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
             <div className="p-4">
               <div className="flex items-start space-x-2 mb-3">
                 <span className="text-warning-500 font-mono text-sm flex-shrink-0">[!]</span>
@@ -135,37 +139,38 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                   <h3 className="font-mono font-bold text-sm text-warning-500 mb-2">
                     opening external site
                   </h3>
-                  <p className="text-gray-100 text-xs mb-2 font-mono">
-                    {'>'} you are about to open this URL in a new browser tab:
+                  <p className="text-gray-100 text-xs font-mono">
+                    You are about to open this URL in a new browser tab:
                   </p>
                   <div className="bg-terminal-400 border border-cyber-600 rounded-sm px-2 py-1.5 mb-2">
-                    <p className="text-xs text-cyber-500 break-all font-mono">
-                      {url}
-                    </p>
+                    <p className="text-xs text-cyber-500 break-all font-mono">{url}</p>
                   </div>
                   <div className="bg-warning-900/20 border border-warning-600 rounded-sm p-2">
-                    <p className="font-mono font-bold text-warning-400 text-xs mb-1.5">
-                      [!] security warning:
+                    <p className="text-xs text-cyber-500 break-all font-mono">
+                      This may expose you to security risks.
                     </p>
-                    <ul className="text-xs text-gray-100 space-y-0.5 font-mono">
-                      <li>{'>'} never enter passwords or personal information</li>
-                      <li>{'>'} verify the URL carefully before proceeding</li>
-                      <li>{'>'} this link opens outside safespace protection</li>
-                      <li>{'>'} exercise caution and trust your instincts</li>
+                    <ul className="list-disc list-inside space-y-1 text-xs text-cyber-500">
+                      <li>{`>`} verify URL carefully before proceeding.</li>
+                      <li>{`>`} this link opens outside safespace protection.</li>
+                      <li>{`>`} exercise caution and trust your instincts.</li>
                     </ul>
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Single Full-Width Button at Bottom */}
-            <div className="border-t border-warning-700 p-3">
-              <button
-                onClick={confirmOpenInNewTab}
-                className="w-full px-3 py-2 bg-warning-500 text-terminal-400 border border-warning-500 rounded-sm font-mono font-bold text-sm hover:bg-warning-400 transition-colors"
-              >
-                i understand, open site
-              </button>
+              <div className="flex justify-end space-x-2 mt-4">
+                <button
+                  onClick={() => setShowWarningModal(false)}
+                  className="px-3 py-1.5 text-xs font-mono text-gray-300 hover:text-white transition-colors"
+                >
+                  cancel
+                </button>
+                <button
+                  onClick={confirmOpenInNewTab}
+                  className="px-3 py-1.5 text-xs font-mono text-white bg-warning-500 hover:bg-warning-600 transition-colors rounded"
+                >
+                  open anyway
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -180,7 +185,9 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
               <span className="text-safe-500 font-mono text-xs">[✓]</span>
               <span className="font-mono font-bold text-xs">safe preview</span>
             </div>
-            <span className="text-xs text-cyber-500 hidden sm:inline font-mono">{'<sandboxed>'}</span>
+            <span className="text-xs text-cyber-500 hidden sm:inline font-mono">
+              {'<sandboxed>'}
+            </span>
           </div>
 
           {/* Controls Bar - Responsive */}
@@ -194,12 +201,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                   title="Reload"
                   aria-label="Reload preview"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -215,12 +217,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                   title="Open in New Tab"
                   aria-label="Open in new tab"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -235,9 +232,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                 <button
                   onClick={() => setViewMode('desktop')}
                   className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'desktop'
-                      ? 'bg-neutral-700 text-white'
-                      : 'text-neutral-400'
+                    viewMode === 'desktop' ? 'bg-neutral-700 text-white' : 'text-neutral-400'
                   }`}
                   title="Desktop"
                   aria-label="Desktop view"
@@ -253,9 +248,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                 <button
                   onClick={() => setViewMode('mobile')}
                   className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'mobile'
-                      ? 'bg-neutral-700 text-white'
-                      : 'text-neutral-400'
+                    viewMode === 'mobile' ? 'bg-neutral-700 text-white' : 'text-neutral-400'
                   }`}
                   title="Mobile"
                   aria-label="Mobile view"
@@ -280,12 +273,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                   title="Reload (Reset to original URL)"
                   aria-label="Reload preview"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -301,12 +289,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                   title="Open in New Tab"
                   aria-label="Open in new tab"
                 >
-                  <svg
-                    className="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -370,22 +353,77 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
           {isLoading ? (
             <div
               className="flex items-center justify-center bg-terminal-400"
-              style={{ height: typeof dimensions.height === 'number' ? `${dimensions.height}px` : dimensions.height }}
+              style={{
+                height:
+                  typeof dimensions.height === 'number'
+                    ? `${dimensions.height}px`
+                    : dimensions.height,
+              }}
             >
               <div className="text-center space-y-3 px-4">
                 <div className="font-mono text-cyber-500 text-sm animate-pulse">
                   <div className="mb-2">[███████████{'>'} ]</div>
-                  <div>loading screenshot...</div>
+                  <div>loading preview...</div>
                 </div>
               </div>
             </div>
-          ) : screenshot?.success && screenshot.screenshot ? (
+          ) : preview?.success && preview.content ? (
             <div className="p-4">
-              <img
-                src={`data:image/jpeg;base64,${screenshot.screenshot}`}
-                alt="Website preview"
-                className="w-full rounded shadow-lg"
-              />
+              <div className={`relative ${viewMode === 'mobile' ? 'max-w-sm mx-auto' : 'w-full'}`}>
+                {viewMode === 'mobile' ? (
+                  // Mobile View with Device Frame
+                  <div
+                    className="relative bg-terminal-300 shadow-2xl overflow-hidden mx-auto border border-cyber-600"
+                    style={{
+                      width: '375px',
+                      height: '667px',
+                      borderRadius: '32px',
+                    }}
+                  >
+                    {/* Notch */}
+                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-terminal-300 rounded-b-3xl z-10"></div>
+
+                    {/* Screen - iframe takes full device dimensions */}
+                    <div
+                      className="relative bg-terminal-400 rounded-3xl overflow-hidden"
+                      style={{
+                        width: '375px',
+                        height: '667px',
+                      }}
+                    >
+                      {iframeLoading && (
+                        <div className="absolute inset-0 bg-terminal-400 flex items-center justify-center z-20">
+                          <div className="font-mono text-cyber-500 text-xs animate-pulse">
+                            <div className="mb-1">[████{'>'} ]</div>
+                            <div>loading...</div>
+                          </div>
+                        </div>
+                      )}
+                      <iframe
+                        srcDoc={preview.content}
+                        className="w-full h-full border-0 bg-white"
+                        title="Website preview"
+                        sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+                        referrerPolicy="no-referrer"
+                        onLoad={handleIframeLoad}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  // Desktop View - Full width
+                  <iframe
+                    srcDoc={preview.content}
+                    className="w-full rounded shadow-lg border border-cyber-600 bg-white"
+                    style={{ height: '600px' }}
+                    title="Website preview"
+                    sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+              </div>
+              <div className="mt-2 text-xs text-gray-400 font-mono text-center">
+                Content size: {preview.sizeFormatted} | Original CSS & Images | JS sandboxed
+              </div>
             </div>
           ) : useIframe ? (
             <div className="p-2 md:p-4 flex justify-center items-start bg-terminal-400 min-h-[400px] relative">
@@ -468,13 +506,18 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
           ) : (
             <div
               className="flex items-center justify-center bg-terminal-400"
-              style={{ height: typeof dimensions.height === 'number' ? `${dimensions.height}px` : dimensions.height }}
+              style={{
+                height:
+                  typeof dimensions.height === 'number'
+                    ? `${dimensions.height}px`
+                    : dimensions.height,
+              }}
             >
               <div className="text-center space-y-2 px-4">
                 <div className="text-danger-500 font-mono text-2xl mb-2">[X]</div>
                 <p className="text-gray-100 font-mono text-sm font-bold">preview not available</p>
                 <p className="text-gray-400 font-mono text-xs">
-                  {screenshot?.error || 'unable to load preview'}
+                  {preview?.error || 'unable to load preview'}
                 </p>
               </div>
             </div>

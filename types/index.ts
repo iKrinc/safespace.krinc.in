@@ -23,6 +23,10 @@ export interface URLAnalysisResponse {
   explanation: string;
   timestamp: string;
   canPreview: boolean;
+  proxyAvailable?: boolean;
+  proxyError?: string;
+  workingMethod?: string;
+  triedVariants?: string[];
 }
 
 export interface ScreenshotRequest {
@@ -34,6 +38,17 @@ export interface ScreenshotResponse {
   screenshot?: string;
   error?: string;
   format: 'base64' | 'url';
+  timestamp: string;
+}
+
+export interface PreviewResponse {
+  success: boolean;
+  url: string;
+  content?: string;
+  size?: number;
+  sizeFormatted?: string;
+  error?: string;
+  canProxy?: boolean;
   timestamp: string;
 }
 
