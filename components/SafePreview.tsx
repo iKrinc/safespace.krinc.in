@@ -375,7 +375,7 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
                   <div
                     className="relative bg-terminal-300 shadow-2xl overflow-hidden mx-auto border border-cyber-600"
                     style={{
-                      width: '375px',
+                      width: '360px',
                       height: '667px',
                       borderRadius: '32px',
                     }}
