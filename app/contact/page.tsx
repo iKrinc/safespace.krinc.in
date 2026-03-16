@@ -29,10 +29,10 @@ export default function ContactPage() {
             </p>
             {/* TODO: Replace with a krinc.in email once set up */}
             <a
-              href="mailto:krishnaincorporated@gmail.com"
+              href="mailto:hello@krinc.in"
               className="text-cyber-500 font-mono text-xs hover:underline break-all"
             >
-              krishnaincorporated@gmail.com
+              hello@krinc.in
             </a>
           </div>
 
