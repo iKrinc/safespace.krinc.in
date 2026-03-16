@@ -1,20 +1,24 @@
 'use client';
 
 import { useURLAnalysis } from '@/hooks/useURLAnalysis';
-import Header from '@/components/Header';
 import URLInput from '@/components/URLInput';
 import AnalysisResults from '@/components/AnalysisResults';
 import SafePreview from '@/components/SafePreview';
-import Footer from '@/components/Footer';
+
+const safeFaqs = [
+  { q: 'is safespace really free?', a: 'yes — completely. no paywalls, no accounts, no credit card. free for everyone, always.' },
+  { q: 'does safespace store the urls i scan?', a: 'no. urls are analyzed on our server but never logged or stored. rate limiting uses temporary ip tracking that auto-expires after 60 seconds.' },
+  { q: 'why do some websites not show in the preview?', a: 'most modern sites block iframe embedding (X-Frame-Options / CSP). this is expected behavior. the security analysis still works — preview is supplementary.' },
+  { q: 'can safespace detect all malicious links?', a: 'no automated tool is 100% accurate. use safespace as one layer of defense alongside caution and common sense. when in doubt, don\'t click.' },
+  { q: 'is safespace open source?', a: 'yes. full source code is available on github. audit every line, contribute improvements, or report issues directly.' },
+];
 
 export default function Home() {
   const { analysis, isLoading, error, analyzeURL } = useURLAnalysis();
 
   return (
-    <div className="min-h-screen flex flex-col bg-terminal-400 grid-bg relative overflow-hidden scanlines">
-      <Header />
-
-      <main className="flex-1 container mx-auto px-4 py-6 relative z-10">
+    <div className="overflow-hidden scanlines">
+      <div className="container mx-auto px-4 py-6 relative z-10">
         <div className="space-y-8">
           {/* URL Input Section */}
           <section>
@@ -65,8 +69,8 @@ export default function Home() {
 
           {/* Getting Started Info (shown when no analysis) */}
           {!analysis && !isLoading && !error && (
-            <section className="max-w-5xl mx-auto animate-fadeIn">
-              <div className="text-center mb-6">
+            <section className="max-w-5xl mx-auto animate-fadeIn space-y-6">
+              <div className="text-center">
                 <h2 className="text-lg font-mono font-bold text-cyber-500 mb-2">
                   {'['} how it works {']'}
                 </h2>
@@ -123,7 +127,7 @@ export default function Home() {
               </div>
 
               {/* Trust indicators */}
-              <div className="mt-6 bg-terminal-300 rounded-sm p-4 border border-cyber-600">
+              <div className="bg-terminal-300 rounded-sm p-4 border border-cyber-600">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                   <div>
                     <div className="text-lg font-mono font-bold text-cyber-500 mb-1">[100%]</div>
@@ -143,12 +147,57 @@ export default function Home() {
                   </div>
                 </div>
               </div>
+
+              {/* FAQ */}
+              <div>
+                <div className="text-center mb-4">
+                  <h2 className="text-base font-mono font-bold text-cyber-500 mb-1">
+                    {'['} faq {']'}
+                  </h2>
+                  <p className="text-xs text-gray-500 font-mono">{'>'} frequently asked questions</p>
+                </div>
+                <div className="space-y-3">
+                  {safeFaqs.map((faq, i) => (
+                    <div key={i} className="bg-terminal-300 border border-cyber-700 rounded-sm p-4">
+                      <p className="font-mono font-bold text-white text-xs mb-1.5">{`> ${faq.q}`}</p>
+                      <p className="font-mono text-gray-400 text-xs leading-relaxed">{faq.a}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Support / Buy Me a Coffee */}
+              <div className="bg-terminal-300 border-2 border-cyber-600 rounded-sm p-6 text-center">
+                <div className="font-mono text-cyber-500 text-xs mb-2">{'// support development'}</div>
+                <h2 className="font-mono font-bold text-white text-base mb-2">[safespace is free forever]</h2>
+                <p className="text-gray-400 font-mono text-xs mb-4 max-w-sm mx-auto leading-relaxed">
+                  no ads, no paywalls, no data harvesting. if safespace helped you stay safe,
+                  consider buying a coffee to keep the project running.
+                </p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {/* TODO: Replace href with your actual Buy Me a Coffee link once set up */}
+                  <a
+                    href="https://www.buymeacoffee.com/krinc"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 font-mono text-sm font-bold bg-[#FFDD00] text-[#000] hover:opacity-90 px-5 py-2.5 rounded-sm transition-opacity"
+                  >
+                    ☕ buy_me_a_coffee()
+                  </a>
+                  <a
+                    href="https://github.com/iKrinc/safespace.krinc.in"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 font-mono text-xs font-bold text-safe-500 border border-safe-500 hover:bg-safe-500/10 px-5 py-2.5 rounded-sm transition-colors"
+                  >
+                    [★] star on github
+                  </a>
+                </div>
+              </div>
             </section>
           )}
         </div>
-      </main>
-
-      <Footer />
+      </div>
     </div>
   );
 }

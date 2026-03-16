@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import { Orbitron, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 
 const orbitron = Orbitron({
   subsets: ['latin'],
@@ -178,7 +180,15 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${jetbrainsMono.variable} ${orbitron.variable} font-mono`}>{children}</body>
+      <body className={`${jetbrainsMono.variable} ${orbitron.variable} font-mono bg-terminal-400`}>
+        <div className="min-h-screen flex flex-col grid-bg relative">
+          <Header />
+          <main className="flex-1">
+            {children}
+          </main>
+          <Footer />
+        </div>
+      </body>
     </html>
   );
 }

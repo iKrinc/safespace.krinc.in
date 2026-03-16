@@ -45,31 +45,56 @@ export function checkHTTPS(url: URL): SecurityCheck {
 }
 
 export function checkSuspiciousPatterns(url: URL): SecurityCheck {
-  const suspiciousPatterns = [
-    /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/, // IP address
-    /paypal|amazon|google|microsoft|apple|bank|login|verify|secure|account|update/i, // Phishing keywords
-    /@/, // @ symbol (used in phishing)
-    /\-{2,}/, // Multiple consecutive dashes
-  ];
-
   const hostname = url.hostname.toLowerCase();
-  const fullUrl = url.href.toLowerCase();
+  const parts = hostname.split('.');
 
-  const hasSuspiciousPattern = suspiciousPatterns.some(
-    (pattern) => pattern.test(hostname) || pattern.test(fullUrl)
+  // Extract registered domain (last two labels, e.g. "google.com" from "www.google.com")
+  const registeredDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+
+  // 1. IP address used as hostname (e.g. http://192.168.1.1/phish)
+  const isIPAddress = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname);
+
+  // 2. Brand impersonation: brand name appears as a standalone word in the URL
+  //    but the registered domain does NOT belong to that brand.
+  //    e.g. google-login.evil.com → suspicious; accounts.google.com → safe
+  const brandKeywords = ['paypal', 'amazon', 'google', 'microsoft', 'apple', 'facebook', 'netflix', 'instagram'];
+  const hasBrandImpersonation = brandKeywords.some((brand) => {
+    // Word-boundary match: brand must be surrounded by dots, dashes, or string boundaries
+    const boundedPattern = new RegExp(`(?:^|[.-])${brand}(?:[.-]|$)`);
+    if (!boundedPattern.test(hostname)) return false;
+    // Safe if the registered domain itself belongs to this brand (google.com, amazon.co.uk, etc.)
+    if (registeredDomain.startsWith(`${brand}.`)) return false;
+    return true;
+  });
+
+  // 3. Common phishing keywords used as standalone words in the registered domain
+  //    Only checked on the registered domain (not subdomains) to avoid flagging login.google.com
+  const phishingInDomain = /(?:^|[.-])(?:login|signin|verify|secure|account|update)(?:[.-]|$)/.test(
+    registeredDomain
   );
 
-  // Check for excessive subdomains (more than 3)
-  const subdomains = hostname.split('.');
-  const hasExcessiveSubdomains = subdomains.length > 4;
+  // 4. @ symbol in URL (redirect obfuscation trick: https://good.com@evil.com)
+  const hasAtSymbol = /@/.test(url.href);
 
-  const isSuspicious = hasSuspiciousPattern || hasExcessiveSubdomains;
+  // 5. Multiple consecutive dashes (common in typosquatting domains)
+  const hasMultipleDashes = /--/.test(hostname);
+
+  // 6. Excessive subdomain depth (more than 4 labels)
+  const hasExcessiveSubdomains = parts.length > 4;
+
+  const isSuspicious =
+    isIPAddress ||
+    hasBrandImpersonation ||
+    phishingInDomain ||
+    hasAtSymbol ||
+    hasMultipleDashes ||
+    hasExcessiveSubdomains;
 
   return {
     name: 'Suspicious Patterns',
     passed: !isSuspicious,
     message: isSuspicious
-      ? 'URL contains patterns commonly used in phishing attacks (IP addresses, suspicious keywords, or excessive subdomains)'
+      ? 'URL contains patterns commonly used in phishing attacks (IP addresses, brand impersonation, suspicious keywords, or excessive subdomains)'
       : 'No suspicious patterns detected in URL structure',
     severity: isSuspicious ? 'high' : 'low',
   };
