@@ -22,6 +22,7 @@
     @apply bg-terminal-400 text-gray-100 antialiased;
     font-feature-settings: 'liga' 1, 'calt' 1; /* Enable ligatures for JetBrains Mono */
     font-size: 14px;
+    overflow-x: hidden;
   }
 
   h1, h2, h3, h4, h5, h6 {

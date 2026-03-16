@@ -180,8 +180,8 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${jetbrainsMono.variable} ${orbitron.variable} font-mono bg-terminal-400`}>
-        <div className="min-h-screen flex flex-col grid-bg relative">
+      <body className={`${jetbrainsMono.variable} ${orbitron.variable} font-mono bg-terminal-400 overflow-x-hidden`}>
+        <div className="min-h-screen flex flex-col grid-bg relative overflow-x-hidden">
           <Header />
           <main className="flex-1">
             {children}
