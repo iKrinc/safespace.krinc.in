@@ -158,7 +158,7 @@ Bug reports → [GitHub Issues](https://github.com/iKrinc/safespace.krinc.in/iss
 
 SafeSpace is free and always will be. If it kept you safe:
 
-☕ [Buy me a coffee](https://www.buymeacoffee.com/krinc) — keeps the servers running.
+❤️ [Sponsor on GitHub](https://github.com/sponsors/iKrinc) — keeps the servers running.
 
 ---
 

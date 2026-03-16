@@ -35,9 +35,8 @@ export default function Header() {
             <a href="/contact" className="font-mono text-xs text-gray-400 hover:text-cyber-500 px-2 py-1.5 rounded-sm hover:bg-terminal-400 transition-all">
               ~/contact
             </a>
-            {/* TODO: Replace href with your actual Buy Me a Coffee link once set up */}
             <a
-              href="https://www.buymeacoffee.com/krinc"
+              href="https://github.com/sponsors/iKrinc"
               target="_blank"
               rel="noopener noreferrer"
               className="hidden sm:inline-flex items-center gap-1 font-mono text-xs font-bold text-terminal-400 bg-cyber-500 hover:bg-cyber-600 px-3 py-1.5 rounded-sm transition-colors"

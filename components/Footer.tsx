@@ -9,14 +9,13 @@ export default function Footer() {
             <p className="font-mono text-xs text-gray-500 leading-relaxed mb-3">
               free url security scanner. no data stored. no tracking. just truth.
             </p>
-            {/* TODO: Replace href with your actual Buy Me a Coffee link once set up */}
             <a
-              href="https://www.buymeacoffee.com/krinc"
+              href="https://github.com/sponsors/iKrinc"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 font-mono text-xs font-bold bg-[#FFDD00] text-[#000] hover:opacity-90 px-2.5 py-1.5 rounded-sm transition-opacity"
             >
-              ☕ buy_me_a_coffee()
+              ❤️ sponsor()
             </a>
           </div>
 

@@ -136,14 +136,13 @@ export default function AboutPage() {
               the project — it helps keep the lights on.
             </p>
             <div className="flex flex-wrap justify-center gap-3">
-              {/* TODO: Replace with your actual Buy Me a Coffee link once set up */}
               <a
-                href="https://www.buymeacoffee.com/krinc"
+                href="https://github.com/sponsors/iKrinc"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 font-mono text-sm font-bold bg-[#FFDD00] text-[#000] hover:opacity-90 px-5 py-2.5 rounded-sm transition-opacity"
               >
-                ☕ buy_me_a_coffee()
+                ❤️ sponsor()
               </a>
               <a
                 href="https://github.com/iKrinc/safespace.krinc.in"

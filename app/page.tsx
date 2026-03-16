@@ -166,7 +166,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Support / Buy Me a Coffee */}
               <div className="bg-terminal-300 border-2 border-cyber-600 rounded-sm p-6 text-center">
                 <div className="font-mono text-cyber-500 text-xs mb-2">{'// support development'}</div>
                 <h2 className="font-mono font-bold text-white text-base mb-2">[safespace is free forever]</h2>
@@ -175,14 +174,13 @@ export default function Home() {
                   consider buying a coffee to keep the project running.
                 </p>
                 <div className="flex flex-wrap justify-center gap-3">
-                  {/* TODO: Replace href with your actual Buy Me a Coffee link once set up */}
                   <a
-                    href="https://www.buymeacoffee.com/krinc"
+                    href="https://github.com/sponsors/iKrinc"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 font-mono text-sm font-bold bg-[#FFDD00] text-[#000] hover:opacity-90 px-5 py-2.5 rounded-sm transition-opacity"
                   >
-                    ☕ buy_me_a_coffee()
+                    ❤️ sponsor()
                   </a>
                   <a
                     href="https://github.com/iKrinc/safespace.krinc.in"
