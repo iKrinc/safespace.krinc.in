@@ -11,7 +11,8 @@ const URLAnalysisRequestSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     // Rate limiting
-    const rateLimitResult = withRateLimit(request);
+    // Raised to 30/min to support the browser extension's SERP batch scanning
+    const rateLimitResult = withRateLimit(request, { maxRequests: 30, interval: 60000 });
 
     if (!rateLimitResult.success) {
       return NextResponse.json(
