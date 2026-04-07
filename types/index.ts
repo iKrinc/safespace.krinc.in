@@ -56,6 +56,54 @@ export interface PreviewResponse {
   timestamp: string;
 }
 
+// ── Deep scan types ──────────────────────────────────────────────────────────
+
+export interface ScriptFinding {
+  label: string;
+  severity: 'high' | 'medium' | 'low';
+  description: string;
+  count: number;
+}
+
+export type OverallRisk = 'none' | 'low' | 'medium' | 'high' | 'critical';
+
+export type DeepScanStage =
+  | 'idle'
+  | 'fetching'
+  | 'analyzing'
+  | 'behavioral'
+  | 'done';
+
+/** A single event captured by the behavioral monitoring iframe script. */
+export interface BehaviorEvent {
+  /** Event type */
+  t: 'timeout' | 'interval' | 'popup' | 'redirect' | 'fetch' | 'xhr' | 'docwrite' | 'iframe' | 'scriptinject';
+  /** Delay in ms (for timers) */
+  d?: number;
+  /** URL or destination */
+  u?: string;
+  /** XHR method */
+  m?: string;
+  /** Whether iframe was hidden */
+  h?: boolean;
+  /** Snippet (docwrite) */
+  s?: string;
+  /** Milliseconds since page load when event fired */
+  ms?: number;
+}
+
+export interface DeepScanState {
+  stage: DeepScanStage;
+  htmlSize: number;
+  scriptCount: number;
+  fetchedJsFiles: number;
+  findings: ScriptFinding[];
+  overallRisk: OverallRisk;
+  behaviorEvents: BehaviorEvent[];
+  fetchError?: string;
+}
+
+// ── Rate limit ────────────────────────────────────────────────────────────────
 export interface RateLimitResult {
   success: boolean;
   limit: number;

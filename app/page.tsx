@@ -1,10 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useURLAnalysis } from '@/hooks/useURLAnalysis';
+import { useDeepScan } from '@/hooks/useDeepScan';
 import URLInput from '@/components/URLInput';
 import AnalysisResults from '@/components/AnalysisResults';
 import SafePreview from '@/components/SafePreview';
+import DeepScanPanel from '@/components/DeepScanPanel';
+import { BehaviorEvent } from '@/types';
 
 const safeFaqs = [
   { q: 'is safespace really free?', a: 'yes — completely. no paywalls, no accounts, no credit card. free for everyone, always.' },
@@ -16,6 +19,23 @@ const safeFaqs = [
 
 export default function Home() {
   const { analysis, isLoading, error, analyzeURL } = useURLAnalysis();
+  const { deepScan, startDeepScan, reset: resetDeepScan } = useDeepScan();
+
+  // Kick off deep scan whenever a new analysis result lands
+  useEffect(() => {
+    if (analysis?.url) {
+      startDeepScan(analysis.url);
+    } else {
+      resetDeepScan();
+    }
+  }, [analysis?.url]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Receive behavioral events from the preview iframe
+  const handleBehaviorReport = useCallback((events: BehaviorEvent[]) => {
+    // The useDeepScan hook listens for SS_BEHAVIOR postMessage independently;
+    // SafePreview forwards the same event here for any extra handling if needed.
+    void events;
+  }, []);
 
   // Auto-analyze when opened with ?url= param (e.g. from extension or new tab)
   useEffect(() => {
@@ -23,7 +43,6 @@ export default function Home() {
     const urlParam = params.get('url');
     if (urlParam) {
       analyzeURL(urlParam);
-      // Clean the param from the URL bar without reloading
       const clean = new URL(window.location.href);
       clean.searchParams.delete('url');
       window.history.replaceState({}, '', clean.toString());
@@ -69,6 +88,16 @@ export default function Home() {
             </section>
           )}
 
+          {/* Deep Scan Section */}
+          {analysis && (
+            <section className="animate-fadeIn">
+              <h2 className="text-base font-mono font-bold text-cyber-500 text-center mb-4">
+                {'['} deep scan {']'}
+              </h2>
+              <DeepScanPanel state={deepScan} />
+            </section>
+          )}
+
           {/* Safe Preview Section */}
           {analysis && (
             <section className="animate-fadeIn">
@@ -78,6 +107,7 @@ export default function Home() {
               <SafePreview
                 url={analysis.url}
                 canPreview={analysis.canPreview}
+                onBehaviorReport={handleBehaviorReport}
               />
             </section>
           )}

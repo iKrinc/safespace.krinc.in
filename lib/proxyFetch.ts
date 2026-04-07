@@ -14,7 +14,7 @@ interface FetchResult {
 /**
  * SSRF protection: block private IPs, localhost, link-local, and .local domains.
  */
-function isBlockedHost(hostname: string): boolean {
+export function isBlockedHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
     h === 'localhost' ||

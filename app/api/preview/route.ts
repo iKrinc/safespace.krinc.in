@@ -68,6 +68,27 @@ function absoluteSrcset(srcset: string, protocol: string, baseDomain: string): s
     .join(', ');
 }
 
+/**
+ * Behavioral monitoring script injected at the very top of <head>.
+ * Intercepts timers, redirects, popups, fetch/XHR, DOM mutations.
+ * After 7 s it fires window.parent.postMessage({type:'SS_BEHAVIOR', events:[...]}, '*').
+ */
+const MONITOR_SCRIPT = `<script id="__ss_monitor">(function(){
+var e=[],ts=Date.now;
+var _st=setTimeout,_si=setInterval;
+window.setTimeout=function(fn,d){if(typeof fn==='function'||typeof fn==='string')e.push({t:'timeout',d:d||0,ms:Date.now()});return _st.apply(this,arguments);};
+window.setInterval=function(fn,d){if(typeof fn==='function'||typeof fn==='string')e.push({t:'interval',d:d||0,ms:Date.now()});return _si.apply(this,arguments);};
+window.open=function(u){e.push({t:'popup',u:String(u||'').slice(0,120)});return null;};
+try{var la=location.assign.bind(location);location.assign=function(u){e.push({t:'redirect',m:'assign',u:String(u).slice(0,120)});};
+var lr=location.replace.bind(location);location.replace=function(u){e.push({t:'redirect',m:'replace',u:String(u).slice(0,120)});};}catch(_){}
+try{var _f=window.fetch;if(_f)window.fetch=function(u,o){e.push({t:'fetch',u:String(u||'').slice(0,120)});return _f.apply(this,arguments);};}catch(_){}
+try{var _xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){e.push({t:'xhr',m:m,u:String(u||'').slice(0,120)});return _xo.apply(this,arguments);};}catch(_){}
+var _dw=document.write.bind(document);document.write=function(s){e.push({t:'docwrite',s:String(s||'').slice(0,80)});return _dw(s);};
+var MO=window.MutationObserver||window.WebKitMutationObserver;
+if(MO){new MO(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(!n.tagName)return;var tag=n.tagName.toUpperCase();if(tag==='IFRAME'){var st=(n.getAttribute('style')||'').replace(/\s/g,'');var h=st.includes('display:none')||st.includes('visibility:hidden')||n.getAttribute('width')==='0'||n.getAttribute('height')==='0';e.push({t:'iframe',h:h,u:String(n.src||n.getAttribute('src')||'').slice(0,120)});}else if(tag==='SCRIPT'&&(n.src||n.getAttribute('src'))){e.push({t:'scriptinject',u:String(n.src||n.getAttribute('src')||'').slice(0,120)});}});});}).observe(document.documentElement,{childList:true,subtree:true});}
+_st(function(){try{window.parent.postMessage({type:'SS_BEHAVIOR',events:e},'*');}catch(_){}},7000);
+})();</script>`;
+
 async function processHTMLContent(html: string, baseUrl: string): Promise<string> {
   try {
     const url = new URL(baseUrl);
@@ -84,6 +105,16 @@ async function processHTMLContent(html: string, baseUrl: string): Promise<string
         headEnd !== -1
           ? html.slice(0, headEnd) + baseTag + html.slice(headEnd)
           : baseTag + html;
+    }
+
+    // Inject behavioral monitoring script at the very start of <head>
+    // so it runs before any page scripts and can intercept them.
+    const headOpen = processed.toLowerCase().indexOf('<head>');
+    if (headOpen !== -1) {
+      const after = headOpen + '<head>'.length;
+      processed = processed.slice(0, after) + MONITOR_SCRIPT + processed.slice(after);
+    } else {
+      processed = MONITOR_SCRIPT + processed;
     }
 
     // Rewrite all image src / srcset / data-src / data-srcset attributes

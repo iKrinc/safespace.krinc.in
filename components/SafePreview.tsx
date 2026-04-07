@@ -3,16 +3,31 @@
 import { useEffect, useState } from 'react';
 import { PreviewResponse } from '@/types';
 
+import { BehaviorEvent } from '@/types';
+
 interface SafePreviewProps {
   url: string;
   canPreview: boolean;
+  onBehaviorReport?: (events: BehaviorEvent[]) => void;
 }
 
-export default function SafePreview({ url, canPreview }: SafePreviewProps) {
+export default function SafePreview({ url, canPreview, onBehaviorReport }: SafePreviewProps) {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
+
+  // Forward postMessage behavioral events from the iframe to the parent hook
+  useEffect(() => {
+    if (!onBehaviorReport) return;
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === 'SS_BEHAVIOR') {
+        onBehaviorReport(e.data.events ?? []);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [onBehaviorReport]);
 
   useEffect(() => {
     if (canPreview) fetchPreview();
