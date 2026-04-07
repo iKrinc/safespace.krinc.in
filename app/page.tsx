@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useURLAnalysis } from '@/hooks/useURLAnalysis';
 import URLInput from '@/components/URLInput';
 import AnalysisResults from '@/components/AnalysisResults';
@@ -15,6 +16,20 @@ const safeFaqs = [
 
 export default function Home() {
   const { analysis, isLoading, error, analyzeURL } = useURLAnalysis();
+
+  // Auto-analyze when opened with ?url= param (e.g. from extension or new tab)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlParam = params.get('url');
+    if (urlParam) {
+      analyzeURL(urlParam);
+      // Clean the param from the URL bar without reloading
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('url');
+      window.history.replaceState({}, '', clean.toString());
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="overflow-hidden scanlines">
