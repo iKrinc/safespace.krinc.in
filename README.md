@@ -1,20 +1,16 @@
 # SafeSpace
 
-**Free URL Security Scanner — check suspicious links before you click.**
+**AI-powered URL security scanner — check suspicious links before you click.**
 
-No sign-up. No data stored. Paste any URL and get an instant security analysis with a sandboxed safe preview.
+No sign-up. No data stored. Paste any URL and get an instant AI-enhanced security analysis with a sandboxed safe preview.
 
-🌐 **Live:** [safespace.krinc.in](https://safespace.krinc.in) &nbsp;|&nbsp; ⭐ **Star on GitHub** if it helped you!
-
----
-
-![SafeSpace — SAFE result for github.com](.github/screenshots/safe-result.png)
+🌐 **Live:** [safespace.krinc.in](https://safespace.krinc.in) &nbsp;|&nbsp; 🧩 **Chrome Extension:** [github.com/iKrinc/safespace.extension](https://github.com/iKrinc/safespace.extension) &nbsp;|&nbsp; ⭐ **Star on GitHub** if it helped you!
 
 ---
 
 ## What It Does
 
-SafeSpace runs 7 security checks on any URL and gives it a safety score from 0–100:
+SafeSpace runs 7 security checks on any URL plus an **AI threat analysis** via Groq, giving it a safety score from 0–100:
 
 | Check | What it detects |
 |---|---|
@@ -28,19 +24,32 @@ SafeSpace runs 7 security checks on any URL and gives it a safety score from 0�
 
 **Scores:** `80–100 = SAFE` &nbsp;|&nbsp; `50–79 = SUSPICIOUS` &nbsp;|&nbsp; `<50 = DANGEROUS`
 
-If the URL passes, a **sandboxed live preview** loads inside the page — no need to open it in a new tab.
+If the URL passes, a **sandboxed live preview** loads — CSS, images, JS animations all render correctly. No need to open it in a new tab.
 
 ---
 
-## Homepage
+## AI Threat Intelligence
 
-![SafeSpace Homepage](.github/screenshots/homepage.png)
+SafeSpace uses a hybrid model — regex checks always run, AI enhances the explanation:
+
+- **Production:** [Groq](https://groq.com) API with `llama-3.1-8b-instant` — ~1s response, free tier (14,400 req/day)
+- **Local dev:** [Ollama](https://ollama.com) with `qwen2.5:7b` — fully offline
+- **Fallback:** If neither is available, regex analysis still works
+
+AI provides:
+- Human-readable threat explanation
+- Specific threat list (typosquatting, suspicious TLD, phishing keywords, etc.)
+- One clear recommendation
 
 ---
 
-## About Page
+## Chrome Extension
 
-![About SafeSpace](.github/screenshots/about.png)
+Install the [SafeSpace Chrome Extension](https://github.com/iKrinc/safespace.extension) to:
+
+- **See safety badges on every Google result** — colored `[✓]` / `[!]` / `[✗]` badges appear automatically
+- **Click any badge** → slide-in panel with full AI analysis + sandboxed preview
+- **New tab page** — terminal-themed clock + smart search bar (URLs go to SafeSpace, queries go to Google)
 
 ---
 
@@ -48,18 +57,31 @@ If the URL passes, a **sandboxed live preview** loads inside the page — no nee
 
 - URLs are analyzed **server-side** but **never stored or logged**
 - No user accounts, no cookies, no tracking scripts
-- Rate limiting is IP-based and auto-expires after 60 seconds
+- Rate limiting is IP-based (30 req/min), auto-expires
 - Fully open-source — audit every line
+
+---
+
+## Security
+
+- **SSRF protection** — blocks requests to `localhost`, `127.x`, `10.x`, `192.168.x`, `172.16-31.x`, `169.254.x`, IPv6 local
+- **CSP headers** — strict Content-Security-Policy, X-Frame-Options DENY, HSTS
+- **Input validation** — all API inputs validated with Zod
+- **Sandboxed preview** — `allow-scripts allow-forms` only, no `allow-same-origin`
 
 ---
 
 ## Tech Stack
 
-- **Next.js 14** — App Router, TypeScript, strict mode
-- **Tailwind CSS** — custom cyberpunk terminal theme
-- **Zod** — strict input validation
-- **LRU Cache** — in-memory rate limiting
-- **API Routes** — server-side analysis, CORS proxy, screenshot service
+| Layer | Tech |
+|---|---|
+| Framework | Next.js 14 (App Router, TypeScript) |
+| Styling | Tailwind CSS — custom cyberpunk terminal theme |
+| AI (prod) | Groq API — `llama-3.1-8b-instant` |
+| AI (dev) | Ollama — `qwen2.5:7b` (configurable) |
+| Validation | Zod |
+| Rate limiting | LRU Cache |
+| Deployment | Vercel (free plan) |
 
 ---
 
@@ -69,15 +91,21 @@ If the URL passes, a **sandboxed live preview** loads inside the page — no nee
 git clone git@github.com:iKrinc/safespace.krinc.in.git
 cd safespace.krinc.in
 npm install
+cp .env.example .env.local
+# Add GROQ_API_KEY to .env.local
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-```bash
-# Build for production
-npm run build
-```
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GROQ_API_KEY` | Yes (prod) | Free key from [console.groq.com](https://console.groq.com) |
+| `OLLAMA_MODEL` | No | Local model (default: `qwen2.5:7b`) |
+
+For Vercel: only add `GROQ_API_KEY` in **Settings → Environment Variables**.
 
 ---
 
@@ -96,8 +124,29 @@ npm run build
   "score": 100,
   "checks": [...],
   "explanation": "This URL appears to be safe...",
-  "timestamp": "2026-03-16T00:00:00.000Z",
+  "aiInsights": {
+    "explanation": "AI-generated explanation...",
+    "threats": [],
+    "recommendation": "Safe to visit.",
+    "powered": "groq"
+  },
+  "timestamp": "2026-04-07T00:00:00.000Z",
   "canPreview": true
+}
+```
+
+### `POST /api/preview`
+
+```json
+// Request
+{ "url": "https://example.com" }
+
+// Response
+{
+  "success": true,
+  "content": "<html>...</html>",
+  "sizeFormatted": "124.5KB",
+  "timestamp": "..."
 }
 ```
 
@@ -108,39 +157,37 @@ npm run build
 ```
 app/
 ├── api/
-│   ├── analyze/route.ts    # URL analysis endpoint
-│   ├── preview/route.ts    # Preview availability check
-│   └── proxy/route.ts      # CORS proxy
+│   ├── analyze/route.ts    — URL analysis endpoint (30 req/min)
+│   ├── preview/route.ts    — Page fetch + CSS inlining
+│   └── proxy/route.ts      — CORS proxy
 ├── about/page.tsx
 ├── contact/page.tsx
-├── layout.tsx              # Root layout with Header + Footer
-└── page.tsx                # Homepage
+└── page.tsx                — Homepage
 components/
-├── Header.tsx
-├── Footer.tsx
 ├── URLInput.tsx
-├── AnalysisResults.tsx
-└── SafePreview.tsx
+├── AnalysisResults.tsx     — Score + AI panel + security checks
+└── SafePreview.tsx         — Sandboxed iframe preview
 lib/
-├── urlAnalyzer.ts          # Analysis orchestration
-├── securityChecks.ts       # All 7 security check functions
-├── rateLimit.ts            # LRU-based rate limiting
-└── proxyFetch.ts           # CORS proxy fetch logic
+├── aiAnalyzer.ts           — Groq + Ollama AI layer
+├── urlAnalyzer.ts          — Orchestrates all checks
+├── securityChecks.ts       — 7 individual check functions
+├── proxyFetch.ts           — Fetch with SSRF protection + AbortController
+└── rateLimit.ts            — LRU-based rate limiter
 ```
 
 ---
 
 ## Deployment
 
-- **Vercel** (recommended) — push to GitHub and connect; zero config
+- **Vercel** (recommended) — push to GitHub and connect; zero config needed
 - **Any Node host** — `npm run build && npm start`
 
 ---
 
 ## Limitations
 
-- SafeSpace uses heuristic analysis, not a live threat database. No automated tool is 100% accurate — use it as one layer of defense alongside caution.
-- The sandboxed preview will show blank for sites that block iframe embedding (X-Frame-Options / CSP). This is expected behavior.
+- SafeSpace uses heuristic + AI analysis, not a live threat database. No automated tool is 100% accurate — use it as one layer of defense alongside caution.
+- Sandboxed preview shows blank for sites that block iframe embedding (X-Frame-Options / CSP). This is expected.
 
 ---
 
@@ -148,7 +195,7 @@ lib/
 
 1. Fork the repo
 2. Create a branch: `git checkout -b feat/your-feature`
-3. Commit changes and open a pull request
+3. Commit and open a pull request
 
 Bug reports → [GitHub Issues](https://github.com/iKrinc/safespace.krinc.in/issues)
 
