@@ -35,9 +35,10 @@ async function fetchCSS(cssUrl: string, baseDomain: string): Promise<string> {
     if (!resp.ok) return '';
     const css = await resp.text();
 
-    // Rewrite relative url() references inside the CSS to absolute
+    // Rewrite all url() references in CSS to absolute (including protocol-relative)
     return css.replace(/url\(["']?([^"')]+)["']?\)/gi, (match, u) => {
-      if (u.startsWith('data:') || u.startsWith('http') || u.startsWith('//')) return match;
+      if (u.startsWith('data:') || u.startsWith('blob:') || u.startsWith('http')) return match;
+      if (u.startsWith('//')) return `url("https:${u}")`;
       const abs = u.startsWith('/') ? `${baseDomain}${u}` : `${baseDomain}/${u}`;
       return `url("${abs}")`;
     });
@@ -46,12 +47,34 @@ async function fetchCSS(cssUrl: string, baseDomain: string): Promise<string> {
   }
 }
 
+/** Convert any URL to absolute given a base domain. */
+function toAbsolute(u: string, protocol: string, baseDomain: string): string {
+  if (!u || u.startsWith('data:') || u.startsWith('blob:') || u.startsWith('#')) return u;
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  if (u.startsWith('//')) return `${protocol}${u}`;
+  if (u.startsWith('/')) return `${baseDomain}${u}`;
+  return `${baseDomain}/${u}`;
+}
+
+/** Rewrite a srcset string to use absolute URLs. */
+function absoluteSrcset(srcset: string, protocol: string, baseDomain: string): string {
+  return srcset
+    .split(',')
+    .map((part) => {
+      const trimmed = part.trim();
+      const [u, ...descriptors] = trimmed.split(/\s+/);
+      return [toAbsolute(u, protocol, baseDomain), ...descriptors].join(' ');
+    })
+    .join(', ');
+}
+
 async function processHTMLContent(html: string, baseUrl: string): Promise<string> {
   try {
     const url = new URL(baseUrl);
     const baseDomain = `${url.protocol}//${url.host}`;
+    const protocol = url.protocol;
 
-    // Inject <base> tag for anything we don't inline (images, scripts, etc.)
+    // Inject <base> tag for anything we don't explicitly rewrite below
     const baseTag = `<base href="${baseDomain}/" target="_self">`;
     let processed = html;
 
@@ -62,6 +85,33 @@ async function processHTMLContent(html: string, baseUrl: string): Promise<string
           ? html.slice(0, headEnd) + baseTag + html.slice(headEnd)
           : baseTag + html;
     }
+
+    // Rewrite all image src / srcset / data-src / data-srcset attributes
+    // This covers: relative paths, protocol-relative (//), and lazy-loaded images
+    processed = processed
+      .replace(/(<img\b[^>]*?\s)(src)=(["'])([^"']*)\3/gi, (_, pre, attr, q, val) =>
+        `${pre}${attr}=${q}${toAbsolute(val, protocol, baseDomain)}${q}`
+      )
+      .replace(/(<img\b[^>]*?\s)(srcset)=(["'])([^"']*)\3/gi, (_, pre, attr, q, val) =>
+        `${pre}${attr}=${q}${absoluteSrcset(val, protocol, baseDomain)}${q}`
+      )
+      .replace(/(<img\b[^>]*?\s)(data-src)=(["'])([^"']*)\3/gi, (_, pre, attr, q, val) =>
+        `${pre}${attr}=${q}${toAbsolute(val, protocol, baseDomain)}${q}`
+      )
+      .replace(/(<img\b[^>]*?\s)(data-srcset)=(["'])([^"']*)\3/gi, (_, pre, attr, q, val) =>
+        `${pre}${attr}=${q}${absoluteSrcset(val, protocol, baseDomain)}${q}`
+      )
+      // <source> inside <picture> and <video>
+      .replace(/(<source\b[^>]*?\s)(srcset)=(["'])([^"']*)\3/gi, (_, pre, attr, q, val) =>
+        `${pre}${attr}=${q}${absoluteSrcset(val, protocol, baseDomain)}${q}`
+      )
+      .replace(/(<source\b[^>]*?\s)(src)=(["'])([^"']*)\3/gi, (_, pre, attr, q, val) =>
+        `${pre}${attr}=${q}${toAbsolute(val, protocol, baseDomain)}${q}`
+      )
+      // <video poster>
+      .replace(/(<video\b[^>]*?\s)(poster)=(["'])([^"']*)\3/gi, (_, pre, attr, q, val) =>
+        `${pre}${attr}=${q}${toAbsolute(val, protocol, baseDomain)}${q}`
+      );
 
     // Collect all external CSS link hrefs
     const cssLinkRegex = /<link[^>]+rel=["']stylesheet["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
