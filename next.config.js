@@ -44,7 +44,8 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "font-src 'self' data:",
-              "connect-src 'self'",
+              // allow outbound calls to Groq AI API
+              "connect-src 'self' https://api.groq.com",
               "frame-src https: http:",
               "object-src 'none'",
               "base-uri 'self'",

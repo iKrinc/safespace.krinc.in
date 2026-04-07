@@ -8,7 +8,7 @@ import {
   checkURLLength,
   checkSpecialCharacters,
 } from './securityChecks';
-import { checkContentAvailability } from './proxyFetch';
+import { getAIInsights } from './aiAnalyzer';
 
 export async function analyzeURL(urlString: string): Promise<URLAnalysisResponse> {
   const timestamp = new Date().toISOString();
@@ -55,35 +55,14 @@ export async function analyzeURL(urlString: string): Promise<URLAnalysisResponse
   // Step 3: Calculate safety score
   const { safetyLevel, score } = calculateSafetyScore(checks);
 
-  // Step 4: Generate explanation
+  // Step 4: Generate base explanation (regex fallback)
   const explanation = generateExplanation(safetyLevel, checks);
 
-  // Step 5: Determine if preview is safe
+  // Step 5: Determine if preview is safe (no proxy check — fast path)
   const canPreview = safetyLevel !== SafetyLevel.DANGEROUS;
 
-  // Step 6: Check proxy availability for content fetching
-  let proxyAvailable = false;
-  let proxyError: string | undefined;
-  let workingMethod: string | undefined;
-  let triedVariants: string[] = [];
-
-  if (canPreview) {
-    const proxyCheck = await checkContentAvailability(url.href);
-    proxyAvailable = proxyCheck.available;
-    proxyError = proxyCheck.error;
-    workingMethod = proxyCheck.workingMethod;
-
-    // Extract tried variants from error message
-    if (proxyCheck.error) {
-      const variantMatch = proxyCheck.error.match(/Tried: (.+)/);
-      if (variantMatch) {
-        triedVariants = variantMatch[1].split('; ').map((v) => {
-          const methodMatch = v.match(/(direct|proxy)\(([^)]+)\)/);
-          return methodMatch ? `${methodMatch[1]}: ${methodMatch[2]}` : v;
-        });
-      }
-    }
-  }
+  // Step 6: Get AI insights (Groq in prod, Ollama in dev, empty if neither)
+  const aiInsights = await getAIInsights(url.href, checks, score, safetyLevel);
 
   return {
     url: url.href,
@@ -91,12 +70,9 @@ export async function analyzeURL(urlString: string): Promise<URLAnalysisResponse
     score,
     checks,
     explanation,
+    aiInsights,
     timestamp,
     canPreview,
-    proxyAvailable,
-    proxyError,
-    workingMethod,
-    triedVariants,
   };
 }
 
@@ -104,28 +80,19 @@ function calculateSafetyScore(checks: SecurityCheck[]): {
   safetyLevel: SafetyLevel;
   score: number;
 } {
-  // Calculate weighted score based on severity and pass/fail
+  const severityWeights = { low: 1, medium: 2, high: 3 };
+
   let totalWeight = 0;
   let earnedWeight = 0;
-
-  const severityWeights = {
-    low: 1,
-    medium: 2,
-    high: 3,
-  };
 
   for (const check of checks) {
     const weight = severityWeights[check.severity];
     totalWeight += weight;
-    if (check.passed) {
-      earnedWeight += weight;
-    }
+    if (check.passed) earnedWeight += weight;
   }
 
-  // Calculate percentage score (0-100)
   const score = Math.round((earnedWeight / totalWeight) * 100);
 
-  // Determine safety level
   let safetyLevel: SafetyLevel;
   if (score >= 80) {
     safetyLevel = SafetyLevel.SAFE;
@@ -135,8 +102,8 @@ function calculateSafetyScore(checks: SecurityCheck[]): {
     safetyLevel = SafetyLevel.DANGEROUS;
   }
 
-  // Additional rule: If any high-severity check fails, mark as DANGEROUS
-  const highSeverityFailed = checks.some((check) => check.severity === 'high' && !check.passed);
+  // Any high-severity failure escalates SUSPICIOUS → DANGEROUS
+  const highSeverityFailed = checks.some((c) => c.severity === 'high' && !c.passed);
   if (highSeverityFailed && safetyLevel === SafetyLevel.SUSPICIOUS) {
     safetyLevel = SafetyLevel.DANGEROUS;
   }
@@ -145,7 +112,7 @@ function calculateSafetyScore(checks: SecurityCheck[]): {
 }
 
 function generateExplanation(safetyLevel: SafetyLevel, checks: SecurityCheck[]): string {
-  const failedChecks = checks.filter((check) => !check.passed);
+  const failedChecks = checks.filter((c) => !c.passed);
 
   switch (safetyLevel) {
     case SafetyLevel.SAFE:
@@ -157,11 +124,7 @@ function generateExplanation(safetyLevel: SafetyLevel, checks: SecurityCheck[]):
       }
       return `This URL shows ${failedChecks.length} warning sign${
         failedChecks.length > 1 ? 's' : ''
-      }: ${failedChecks
-        .map((c) => c.name)
-        .join(
-          ', '
-        )}. Proceed with caution and verify the source before interacting with this website.`;
+      }: ${failedChecks.map((c) => c.name).join(', ')}. Proceed with caution and verify the source before interacting with this website.`;
 
     case SafetyLevel.DANGEROUS:
       if (failedChecks.length === 0) {

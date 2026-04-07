@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { PreviewResponse } from '@/types';
 
 interface SafePreviewProps {
@@ -8,83 +8,50 @@ interface SafePreviewProps {
   canPreview: boolean;
 }
 
-type ViewMode = 'desktop' | 'mobile';
-
 export default function SafePreview({ url, canPreview }: SafePreviewProps) {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [useIframe, setUseIframe] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('desktop');
   const [iframeKey, setIframeKey] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
-  const [iframeLoading, setIframeLoading] = useState(true);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    if (canPreview) {
-      fetchPreview();
-    }
+    if (canPreview) fetchPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, canPreview]);
 
-  // Detect user's device
-  useEffect(() => {
-    const isMobile = window.innerWidth < 768;
-    setViewMode(isMobile ? 'mobile' : 'desktop');
-  }, []);
-
   const fetchPreview = async () => {
     setIsLoading(true);
+    setPreview(null);
     try {
       const response = await fetch('/api/preview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
       });
-
       const data: PreviewResponse = await response.json();
       setPreview(data);
-
-      if (!data.success) {
-        setUseIframe(true);
-      }
-    } catch (error) {
-      console.error('Failed to fetch preview:', error);
-      setUseIframe(true);
+    } catch {
+      setPreview({
+        success: false,
+        url,
+        error: 'network error while loading preview',
+        timestamp: new Date().toISOString(),
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleReload = () => {
-    setIframeLoading(true);
-    setIframeKey((prev) => prev + 1);
+    setIframeKey((k) => k + 1);
+    fetchPreview();
   };
 
-  const handleIframeLoad = () => {
-    setIframeLoading(false);
-  };
+  const openWithWarning = () => setShowWarningModal(true);
 
-  const handleOpenInNewTab = () => {
-    setShowWarningModal(true);
-  };
-
-  const confirmOpenInNewTab = () => {
+  const confirmOpen = () => {
     window.open(url, '_blank', 'noopener,noreferrer');
     setShowWarningModal(false);
-  };
-
-  const getIframeDimensions = () => {
-    if (viewMode === 'mobile') {
-      return {
-        width: 375,
-        height: 667,
-      };
-    }
-    return {
-      width: '100%',
-      height: 600,
-    };
   };
 
   if (!canPreview) {
@@ -95,11 +62,10 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
             <span className="text-danger-500 font-mono text-sm flex-shrink-0">[X]</span>
             <div>
               <h3 className="font-mono font-bold text-danger-400 mb-1 text-sm">
-                preview not available
+                preview disabled
               </h3>
               <p className="text-gray-100 text-xs font-mono">
-                {`>`} this URL has been flagged as potentially dangerous. preview has been disabled
-                for your protection.
+                {'>'} URL flagged as dangerous. preview has been disabled for your protection.
               </p>
             </div>
           </div>
@@ -108,65 +74,42 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
     );
   }
 
-  const dimensions = getIframeDimensions();
-
   return (
     <div className="w-full max-w-6xl mx-auto px-4">
       {/* Warning Modal */}
       {showWarningModal && (
         <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50 p-4">
-          <div className="bg-terminal-300 border border-warning-500 max-w-md w-full relative animate-fadeIn">
-            <div className="p-4">
-              <button
-                onClick={() => setShowWarningModal(false)}
-                className="absolute top-2 right-2 text-gray-400 hover:text-warning-500 transition-colors z-10"
-                aria-label="Close"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4">
-              <div className="flex items-start space-x-2 mb-3">
-                <span className="text-warning-500 font-mono text-sm flex-shrink-0">[!]</span>
-                <div>
-                  <h3 className="font-mono font-bold text-sm text-warning-500 mb-2">
-                    opening external site
-                  </h3>
-                  <p className="text-gray-100 text-xs font-mono">
-                    You are about to open this URL in a new browser tab:
-                  </p>
-                  <div className="bg-terminal-400 border border-cyber-600 rounded-sm px-2 py-1.5 mb-2">
-                    <p className="text-xs text-cyber-500 break-all font-mono">{url}</p>
-                  </div>
-                  <div className="bg-warning-900/20 border border-warning-600 rounded-sm p-2">
-                    <p className="text-xs text-cyber-500 break-all font-mono">
-                      This may expose you to security risks.
-                    </p>
-                    <ul className="list-disc list-inside space-y-1 text-xs text-cyber-500">
-                      <li>{`>`} verify URL carefully before proceeding.</li>
-                      <li>{`>`} this link opens outside safespace protection.</li>
-                      <li>{`>`} exercise caution and trust your instincts.</li>
-                    </ul>
-                  </div>
-                </div>
+          <div className="bg-terminal-300 border border-warning-500 max-w-md w-full animate-fadeIn">
+            <div className="p-4 border-b border-warning-700">
+              <div className="flex items-center gap-2">
+                <span className="text-warning-500 font-mono text-sm font-bold">[!]</span>
+                <h3 className="font-mono font-bold text-sm text-warning-400">
+                  opening external site
+                </h3>
               </div>
-              <div className="flex justify-end space-x-2 mt-4">
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs font-mono text-gray-400">
+                {'>'} you are about to leave safespace protection:
+              </p>
+              <div className="bg-terminal-400 border border-cyber-700 rounded-sm px-3 py-2">
+                <p className="text-xs text-cyber-400 break-all font-mono">{url}</p>
+              </div>
+              <ul className="text-xs font-mono text-gray-400 space-y-1">
+                <li>{'>'} verify the URL carefully before proceeding</li>
+                <li>{'>'} this link opens outside safespace protection</li>
+                <li>{'>'} never enter credentials on suspicious sites</li>
+              </ul>
+              <div className="flex justify-end gap-3 pt-1">
                 <button
                   onClick={() => setShowWarningModal(false)}
-                  className="px-3 py-1.5 text-xs font-mono text-gray-300 hover:text-white transition-colors"
+                  className="px-3 py-1.5 text-xs font-mono text-gray-400 hover:text-white transition-colors"
                 >
                   cancel
                 </button>
                 <button
-                  onClick={confirmOpenInNewTab}
-                  className="px-3 py-1.5 text-xs font-mono text-white bg-warning-500 hover:bg-warning-600 transition-colors rounded"
+                  onClick={confirmOpen}
+                  className="px-4 py-1.5 text-xs font-mono font-bold bg-warning-500 hover:bg-warning-400 text-black transition-colors rounded-sm"
                 >
                   open anyway
                 </button>
@@ -177,376 +120,135 @@ export default function SafePreview({ url, canPreview }: SafePreviewProps) {
       )}
 
       <div className="border border-cyber-500 rounded-sm overflow-hidden">
-        {/* Browser Controls Bar */}
-        <div className="bg-terminal-300 text-gray-100">
-          {/* Top Bar - Safe Preview Mode Label */}
-          <div className="px-3 py-1.5 flex items-center justify-between border-b border-cyber-600">
-            <div className="flex items-center space-x-2">
-              <span className="text-safe-500 font-mono text-xs">[✓]</span>
-              <span className="font-mono font-bold text-xs">safe preview</span>
+        {/* Browser Chrome */}
+        <div className="bg-terminal-300 border-b border-cyber-600">
+          {/* Top label row */}
+          <div className="px-3 py-1.5 flex items-center justify-between border-b border-cyber-700">
+            <div className="flex items-center gap-2">
+              <span className="text-safe-500 font-mono text-xs font-bold">[✓]</span>
+              <span className="font-mono text-xs font-bold text-gray-300">safe preview</span>
             </div>
-            <span className="text-xs text-cyber-500 hidden sm:inline font-mono">
+            <span className="font-mono text-xs text-cyber-600 hidden sm:block">
               {'<sandboxed>'}
             </span>
           </div>
 
-          {/* Controls Bar - Responsive */}
-          <div className="px-2 md:px-3 py-1.5 md:py-2">
-            {/* Mobile Layout (< 640px) */}
-            <div className="flex sm:hidden items-center justify-between gap-2">
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={handleReload}
-                  className="p-2 hover:bg-terminal-400 rounded-sm transition-colors"
-                  title="Reload"
-                  aria-label="Reload preview"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                </button>
+          {/* URL + controls row */}
+          <div className="px-3 py-2 flex items-center gap-2">
+            {/* Action buttons */}
+            <button
+              onClick={handleReload}
+              disabled={isLoading}
+              className="p-1.5 rounded-sm hover:bg-terminal-400 transition-colors text-gray-500 hover:text-cyber-400 disabled:opacity-40 flex-shrink-0"
+              title="Reload preview"
+              aria-label="Reload preview"
+            >
+              <svg
+                className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+            </button>
 
-                <button
-                  onClick={handleOpenInNewTab}
-                  className="p-2 hover:bg-neutral-800 rounded transition-colors"
-                  title="Open in New Tab"
-                  aria-label="Open in new tab"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1 bg-neutral-800 rounded p-0.5">
-                <button
-                  onClick={() => setViewMode('desktop')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'desktop' ? 'bg-neutral-700 text-white' : 'text-neutral-400'
-                  }`}
-                  title="Desktop"
-                  aria-label="Desktop view"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setViewMode('mobile')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'mobile' ? 'bg-neutral-700 text-white' : 'text-neutral-400'
-                  }`}
-                  title="Mobile"
-                  aria-label="Mobile view"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M7 2a2 2 0 00-2 2v12a2 2 0 002 2h6a2 2 0 002-2V4a2 2 0 00-2-2H7zm3 14a1 1 0 100-2 1 1 0 000 2z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
+            {/* URL bar */}
+            <div className="flex-1 min-w-0 bg-terminal-400 border border-cyber-700 rounded-sm px-2.5 py-1">
+              <p className="text-xs font-mono text-gray-400 truncate">{url}</p>
             </div>
 
-            {/* Desktop Layout (>= 640px) */}
-            <div className="hidden sm:flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleReload}
-                  className="p-2 hover:bg-neutral-800 rounded transition-colors"
-                  title="Reload (Reset to original URL)"
-                  aria-label="Reload preview"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                </button>
-
-                <button
-                  onClick={handleOpenInNewTab}
-                  className="p-2 hover:bg-neutral-800 rounded transition-colors"
-                  title="Open in New Tab"
-                  aria-label="Open in new tab"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="flex-1 max-w-md">
-                <div className="bg-neutral-800 rounded px-3 py-1.5 text-sm text-neutral-300 truncate">
-                  {url}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1 bg-neutral-800 rounded p-1">
-                <button
-                  onClick={() => setViewMode('desktop')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'desktop'
-                      ? 'bg-neutral-700 text-white'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                  title="Desktop View"
-                  aria-label="Desktop view"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setViewMode('mobile')}
-                  className={`p-1.5 rounded transition-colors ${
-                    viewMode === 'mobile'
-                      ? 'bg-neutral-700 text-white'
-                      : 'text-neutral-400 hover:text-white'
-                  }`}
-                  title="Mobile View"
-                  aria-label="Mobile view"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      fillRule="evenodd"
-                      d="M7 2a2 2 0 00-2 2v12a2 2 0 002 2h6a2 2 0 002-2V4a2 2 0 00-2-2H7zm3 14a1 1 0 100-2 1 1 0 000 2z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
+            {/* Open in new tab */}
+            <button
+              onClick={openWithWarning}
+              className="p-1.5 rounded-sm hover:bg-terminal-400 transition-colors text-gray-500 hover:text-warning-400 flex-shrink-0"
+              title="Open in new tab"
+              aria-label="Open in new tab"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                />
+              </svg>
+            </button>
           </div>
         </div>
 
-        {/* Preview Content */}
+        {/* Preview content */}
         <div className="bg-terminal-400">
           {isLoading ? (
-            <div
-              className="flex items-center justify-center bg-terminal-400"
-              style={{
-                height:
-                  typeof dimensions.height === 'number'
-                    ? `${dimensions.height}px`
-                    : dimensions.height,
-              }}
-            >
-              <div className="text-center space-y-3 px-4">
-                <div className="font-mono text-cyber-500 text-sm animate-pulse">
-                  <div className="mb-2">[███████████{'>'} ]</div>
-                  <div>loading preview...</div>
+            <div className="flex items-center justify-center" style={{ height: '560px' }}>
+              <div className="text-center space-y-3">
+                <div className="font-mono text-cyber-500 text-sm">
+                  <div className="mb-2 animate-pulse">[██████████{'>'}]</div>
+                  <div className="text-xs animate-pulse">loading preview...</div>
                 </div>
               </div>
             </div>
           ) : preview?.success && preview.content ? (
-            <div className="p-4">
-              <div className={`relative ${viewMode === 'mobile' ? 'max-w-sm mx-auto' : 'w-full'}`}>
-                {viewMode === 'mobile' ? (
-                  // Mobile View with Device Frame
-                  <div
-                    className="relative bg-terminal-300 shadow-2xl overflow-hidden mx-auto border border-cyber-600"
-                    style={{
-                      width: '360px',
-                      height: '667px',
-                      borderRadius: '32px',
-                    }}
-                  >
-                    {/* Notch */}
-                    <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-terminal-300 rounded-b-3xl z-10"></div>
-
-                    {/* Screen - iframe takes full device dimensions */}
-                    <div
-                      className="relative bg-terminal-400 rounded-3xl overflow-hidden"
-                      style={{
-                        width: '375px',
-                        height: '667px',
-                      }}
-                    >
-                      {iframeLoading && (
-                        <div className="absolute inset-0 bg-terminal-400 flex items-center justify-center z-20">
-                          <div className="font-mono text-cyber-500 text-xs animate-pulse">
-                            <div className="mb-1">[████{'>'} ]</div>
-                            <div>loading...</div>
-                          </div>
-                        </div>
-                      )}
-                      <iframe
-                        srcDoc={preview.content}
-                        className="w-full h-full border-0 bg-white"
-                        title="Website preview"
-                        sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-                        referrerPolicy="no-referrer"
-                        onLoad={handleIframeLoad}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  // Desktop View - Full width
-                  <iframe
-                    srcDoc={preview.content}
-                    className="w-full rounded shadow-lg border border-cyber-600 bg-white"
-                    style={{ height: '600px' }}
-                    title="Website preview"
-                    sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-              </div>
-              <div className="mt-2 text-xs text-gray-400 font-mono text-center">
-                Content size: {preview.sizeFormatted} | Original CSS & Images | JS sandboxed
-              </div>
-            </div>
-          ) : useIframe ? (
-            <div className="p-2 md:p-4 flex justify-center items-start bg-terminal-400 min-h-[400px] relative">
-              {viewMode === 'mobile' ? (
-                // Mobile View with Device Frame
-                <div
-                  className="relative bg-terminal-300 shadow-2xl overflow-hidden mx-auto border border-cyber-600"
-                  style={{
-                    width: '295px',
-                    height: '603px',
-                    borderRadius: '32px',
-                    padding: '12px',
-                  }}
-                >
-                  {/* Notch */}
-                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-terminal-300 rounded-b-3xl z-10"></div>
-
-                  {/* Screen - perfectly matches frame with no overflow */}
-                  <div
-                    className="relative bg-terminal-400 rounded-3xl overflow-hidden"
-                    style={{
-                      width: '271px', // 295 - 24 (12px padding on each side)
-                      height: '579px', // 603 - 24 (12px padding on each side)
-                    }}
-                  >
-                    {iframeLoading && (
-                      <div className="absolute inset-0 bg-terminal-400 flex items-center justify-center z-20">
-                        <div className="font-mono text-cyber-500 text-xs animate-pulse">
-                          <div className="mb-1">[████{'>'} ]</div>
-                          <div>loading...</div>
-                        </div>
-                      </div>
-                    )}
-                    <iframe
-                      key={iframeKey}
-                      ref={iframeRef}
-                      src={url}
-                      sandbox="allow-same-origin allow-scripts allow-forms"
-                      className="border-0 bg-white"
-                      title="Safe preview"
-                      referrerPolicy="no-referrer"
-                      onLoad={handleIframeLoad}
-                      style={{
-                        width: '375px',
-                        height: '812px',
-                        transform: 'scale(0.7227)', // 271/375 = 0.7227 for perfect fit
-                        transformOrigin: '0 0',
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : (
-                // Desktop View
-                <div className="w-full bg-terminal-400 rounded-sm border border-cyber-600 overflow-hidden relative">
-                  {iframeLoading && (
-                    <div
-                      className="absolute inset-0 bg-terminal-400 flex items-center justify-center z-20"
-                      style={{ height: `${dimensions.height}px` }}
-                    >
-                      <div className="font-mono text-cyber-500 text-sm animate-pulse">
-                        <div className="mb-2">[███████████{'>'} ]</div>
-                        <div>loading preview...</div>
-                      </div>
-                    </div>
-                  )}
-                  <iframe
-                    key={iframeKey}
-                    ref={iframeRef}
-                    src={url}
-                    sandbox="allow-same-origin allow-scripts allow-forms"
-                    className="w-full border-0 bg-white"
-                    style={{ height: `${dimensions.height}px` }}
-                    title="Safe preview"
-                    referrerPolicy="no-referrer"
-                    onLoad={handleIframeLoad}
-                  />
-                </div>
-              )}
-            </div>
+            /*
+             * sandbox="allow-scripts allow-forms"
+             * - allow-scripts: enables JS loaders, CSS animations, entry animations, GSAP, etc.
+             * - allow-forms: enables form elements to render correctly
+             * - No allow-same-origin: iframe has opaque origin — cannot access parent cookies/storage
+             * - No allow-popups: prevents the previewed page from opening new windows
+             * External CSS/JS/fonts load normally via the <base> tag injected by processHTMLContent.
+             */
+            <iframe
+              key={iframeKey}
+              srcDoc={preview.content}
+              className="w-full border-0 bg-white"
+              style={{ height: '560px', display: 'block' }}
+              title="Safe website preview"
+              sandbox="allow-scripts allow-forms"
+              referrerPolicy="no-referrer"
+            />
           ) : (
             <div
-              className="flex items-center justify-center bg-terminal-400"
-              style={{
-                height:
-                  typeof dimensions.height === 'number'
-                    ? `${dimensions.height}px`
-                    : dimensions.height,
-              }}
+              className="flex flex-col items-center justify-center"
+              style={{ height: '560px' }}
             >
-              <div className="text-center space-y-2 px-4">
-                <div className="text-danger-500 font-mono text-2xl mb-2">[X]</div>
-                <p className="text-gray-100 font-mono text-sm font-bold">preview not available</p>
-                <p className="text-gray-400 font-mono text-xs">
-                  {preview?.error || 'unable to load preview'}
+              <div className="text-center space-y-3 max-w-xs px-4">
+                <div className="font-mono text-warning-500 text-xl mb-1">[!]</div>
+                <p className="text-gray-200 font-mono text-sm font-bold">preview unavailable</p>
+                <p className="text-gray-500 font-mono text-xs leading-relaxed">
+                  {preview?.error ||
+                    'this site blocked preview loading (X-Frame-Options or network error)'}
                 </p>
+                <button
+                  onClick={openWithWarning}
+                  className="mt-1 px-4 py-2 text-xs font-mono border border-warning-700 text-warning-400 hover:bg-terminal-300 hover:border-warning-500 transition-colors rounded-sm"
+                >
+                  open site carefully [→]
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Info Notice */}
-        <div className="bg-terminal-400 border-t border-cyber-600 px-3 py-2">
-          <div className="flex items-start gap-1.5 text-xs text-gray-100">
-            <span className="text-cyber-500 font-mono flex-shrink-0">[i]</span>
-            <div className="font-mono">
-              <p className="font-bold mb-1 text-cyber-500 text-xs">preview info:</p>
-              <ul className="text-xs space-y-0.5 text-gray-400">
-                <li>{'>'} reload resets to the original URL</li>
-                <li>{'>'} open link opens site in new browser tab with warning</li>
-                <li>{'>'} some websites block iframe embedding (blank is normal)</li>
-                <li>{'>'} SPAs may not support back navigation</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Security Notice */}
-        <div className="bg-terminal-300 border-t border-cyber-700 text-gray-100 px-3 py-2 text-xs">
-          <div className="flex items-center gap-1.5 font-mono">
-            <span className="text-safe-500 flex-shrink-0">[✓]</span>
-            <span className="text-xs">
-              sandboxed and isolated. always verify URLs before entering personal information.
-            </span>
+        {/* Footer */}
+        <div className="bg-terminal-300 border-t border-cyber-700 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-gray-600">
+            <span className="text-safe-700">[✓] sandboxed</span>
+            <span className="hidden sm:inline">|</span>
+            <span className="hidden sm:inline">scripts isolated</span>
+            <span className="hidden sm:inline">|</span>
+            <span className="hidden sm:inline">no parent access</span>
+            {preview?.sizeFormatted && (
+              <>
+                <span className="hidden sm:inline">|</span>
+                <span>{preview.sizeFormatted}</span>
+              </>
+            )}
+            <span className="ml-auto text-gray-700">always verify URLs before entering info</span>
           </div>
         </div>
       </div>

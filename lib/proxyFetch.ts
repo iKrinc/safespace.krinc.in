@@ -1,5 +1,6 @@
 /**
- * Proxy fetch utility for bypassing CORS and WAF restrictions
+ * Proxy fetch utility for bypassing CORS restrictions during preview.
+ * Includes SSRF protection to block requests to private/internal networks.
  */
 
 interface FetchResult {
@@ -10,7 +11,51 @@ interface FetchResult {
   url: string;
 }
 
+/**
+ * SSRF protection: block private IPs, localhost, link-local, and .local domains.
+ */
+function isBlockedHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === 'localhost' ||
+    h === '127.0.0.1' ||
+    h === '::1' ||
+    h === '0.0.0.0' ||
+    h.endsWith('.local') ||
+    /^10\./.test(h) ||
+    /^192\.168\./.test(h) ||
+    /^172\.(1[6-9]|2[0-9]|3[01])\./.test(h) ||
+    /^169\.254\./.test(h) || // link-local
+    /^fc00:/i.test(h) || // IPv6 unique local
+    /^fe80:/i.test(h) // IPv6 link-local
+  );
+}
+
 async function tryFetch(url: string, useProxy: boolean = false): Promise<FetchResult> {
+  // SSRF protection
+  try {
+    const parsed = new URL(url);
+    if (isBlockedHost(parsed.hostname)) {
+      return {
+        success: false,
+        error: 'blocked: private or internal URL',
+        method: useProxy ? 'proxy' : 'direct',
+        url,
+      };
+    }
+  } catch {
+    return {
+      success: false,
+      error: 'invalid URL format',
+      method: useProxy ? 'proxy' : 'direct',
+      url,
+    };
+  }
+
+  // Abort after 8 seconds per attempt
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+
   try {
     const headers = {
       'User-Agent': 'SafeSpace Analyzer (https://safespace.krinc.in)',
@@ -30,22 +75,20 @@ async function tryFetch(url: string, useProxy: boolean = false): Promise<FetchRe
     let method: string;
 
     if (useProxy) {
-      // For client-side proxy requests
       method = 'proxy';
       const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
       response = await fetch(proxyUrl, {
         method: 'GET',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
+        headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8' },
+        signal: controller.signal,
       });
     } else {
-      // For server-side direct requests
       method = 'direct';
       response = await fetch(url, {
         method: 'GET',
         headers,
         redirect: 'follow',
+        signal: controller.signal,
       });
     }
 
@@ -59,24 +102,21 @@ async function tryFetch(url: string, useProxy: boolean = false): Promise<FetchRe
     }
 
     const html = await response.text();
-    return {
-      success: true,
-      content: html,
-      method,
-      url,
-    };
+    return { success: true, content: html, method, url };
   } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
     return {
       success: false,
-      error: `${useProxy ? 'proxy' : 'direct'} fetch error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error: `${useProxy ? 'proxy' : 'direct'} fetch error: ${msg}`,
       method: useProxy ? 'proxy' : 'direct',
       url,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
 export async function fetchWithProxy(url: string): Promise<string> {
-  // Normalize URL and generate all possible variants
   let normalizedUrl: URL;
   try {
     normalizedUrl = new URL(url);
@@ -84,45 +124,35 @@ export async function fetchWithProxy(url: string): Promise<string> {
     throw new Error(`Invalid URL format: ${url}`);
   }
 
-  // Generate all URL variants to try
-  const variants: string[] = [];
+  // SSRF check before attempting fetch
+  if (isBlockedHost(normalizedUrl.hostname)) {
+    throw new Error('Blocked: private or internal URL not allowed');
+  }
 
-  // If no protocol specified (like localhost:3000), try HTTPS first, then HTTP
+  // Generate URL variants (original + opposite protocol)
+  const variants: string[] = [];
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     variants.push(`https://${url}`, `http://${url}`);
   } else {
-    // If protocol is specified, try the opposite protocol as fallback
-    const oppositeProtocol = normalizedUrl.protocol === 'https:' ? 'http:' : 'https:';
-    const oppositeUrl = url.replace(normalizedUrl.protocol, oppositeProtocol);
-    variants.push(url, oppositeUrl);
+    const opposite = normalizedUrl.protocol === 'https:' ? 'http:' : 'https:';
+    variants.push(url, url.replace(normalizedUrl.protocol, opposite));
   }
 
-  // Try each URL variant with both direct and proxy methods
   const allAttempts: FetchResult[] = [];
 
   for (const variant of variants) {
-    // Try direct fetch first (server-side)
     const directResult = await tryFetch(variant, false);
     allAttempts.push(directResult);
+    if (directResult.success) return directResult.content!;
 
-    if (directResult.success) {
-      return directResult.content!;
-    }
-
-    // Try proxy fetch as fallback
     const proxyResult = await tryFetch(variant, true);
     allAttempts.push(proxyResult);
-
-    if (proxyResult.success) {
-      return proxyResult.content!;
-    }
+    if (proxyResult.success) return proxyResult.content!;
   }
 
-  // All attempts failed, return detailed error
   const errorSummary = allAttempts
-    .map((result) => `${result.method}(${result.url}): ${result.error}`)
+    .map((r) => `${r.method}(${r.url}): ${r.error}`)
     .join('; ');
-
   throw new Error(`All fetch attempts failed. Tried: ${errorSummary}`);
 }
 
@@ -134,19 +164,11 @@ export async function checkContentAvailability(
     return { available: true };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-    // Extract working method from error message if available
-    let workingMethod: string | undefined;
-    if (errorMessage.includes('direct(')) {
-      workingMethod = 'direct';
-    } else if (errorMessage.includes('proxy(')) {
-      workingMethod = 'proxy';
-    }
-
-    return {
-      available: false,
-      error: errorMessage,
-      workingMethod,
-    };
+    const workingMethod = errorMessage.includes('direct(')
+      ? 'direct'
+      : errorMessage.includes('proxy(')
+        ? 'proxy'
+        : undefined;
+    return { available: false, error: errorMessage, workingMethod };
   }
 }

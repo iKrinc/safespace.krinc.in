@@ -11,6 +11,13 @@ export interface SecurityCheck {
   severity: 'low' | 'medium' | 'high';
 }
 
+export interface AIInsights {
+  explanation: string;
+  threats: string[];
+  recommendation: string;
+  powered: 'groq' | 'ollama' | 'none';
+}
+
 export interface URLAnalysisRequest {
   url: string;
 }
@@ -21,12 +28,9 @@ export interface URLAnalysisResponse {
   score: number;
   checks: SecurityCheck[];
   explanation: string;
+  aiInsights?: AIInsights;
   timestamp: string;
   canPreview: boolean;
-  proxyAvailable?: boolean;
-  proxyError?: string;
-  workingMethod?: string;
-  triedVariants?: string[];
 }
 
 export interface ScreenshotRequest {
