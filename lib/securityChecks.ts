@@ -73,8 +73,10 @@ export function checkSuspiciousPatterns(url: URL): SecurityCheck {
     registeredDomain
   );
 
-  // 4. @ symbol in URL (redirect obfuscation trick: https://good.com@evil.com)
-  const hasAtSymbol = /@/.test(url.href);
+  // 4. @ symbol in the *authority* section (redirect obfuscation: https://good.com@evil.com)
+  //    The URL parser puts the part before @ into url.username, so we check that.
+  //    Path-level @ (e.g. youtube.com/@handle) is normal and must NOT be flagged.
+  const hasAtSymbol = url.username.length > 0;
 
   // 5. Multiple consecutive dashes (common in typosquatting domains)
   const hasMultipleDashes = /--/.test(hostname);
@@ -155,8 +157,17 @@ export function analyzeDomainAge(url: URL): SecurityCheck {
     'amazon.com',
     'facebook.com',
     'twitter.com',
+    'x.com',
     'github.com',
     'stackoverflow.com',
+    'youtube.com',
+    'instagram.com',
+    'linkedin.com',
+    'reddit.com',
+    'wikipedia.org',
+    'cloudflare.com',
+    'vercel.com',
+    'netlify.com',
   ];
 
   const isWellKnown = wellKnownDomains.some((domain) => hostname.endsWith(domain));
