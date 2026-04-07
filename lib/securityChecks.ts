@@ -9,7 +9,6 @@ export function validateURL(urlString: string): {
     // Handle protocol-less URLs (like localhost:3000)
     let normalizedUrl = urlString;
     if (!urlString.startsWith('http://') && !urlString.startsWith('https://')) {
-      // Try HTTPS first, then HTTP as fallback
       normalizedUrl = `https://${urlString}`;
     }
 
@@ -50,39 +49,63 @@ export function checkSuspiciousPatterns(url: URL): SecurityCheck {
 
   // Extract registered domain (last two labels, e.g. "google.com" from "www.google.com")
   const registeredDomain = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
+  const tld = parts[parts.length - 1];
 
   // 1. IP address used as hostname (e.g. http://192.168.1.1/phish)
   const isIPAddress = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname);
 
-  // 2. Brand impersonation: brand name appears as a standalone word in the URL
-  //    but the registered domain does NOT belong to that brand.
+  // 2. Brand impersonation: brand appears as a standalone word in the hostname
+  //    but the hostname is NOT an officially owned domain of that brand.
   //    e.g. google-login.evil.com → suspicious; accounts.google.com → safe
-  const brandKeywords = ['paypal', 'amazon', 'google', 'microsoft', 'apple', 'facebook', 'netflix', 'instagram'];
-  const hasBrandImpersonation = brandKeywords.some((brand) => {
-    // Word-boundary match: brand must be surrounded by dots, dashes, or string boundaries
+  //    google-analytics.com → safe (it's Google's own domain)
+  const brandOwned: Record<string, string[]> = {
+    paypal:    ['paypal.com', 'paypal.me', 'paypalobjects.com'],
+    amazon:    ['amazon.com', 'amazonaws.com', 'amazon.co.uk', 'amazon.de', 'amazon.fr',
+                'amazon.co.jp', 'amazon.ca', 'amazon.com.au', 'amazon.in'],
+    google:    ['google.com', 'googleapis.com', 'google-analytics.com', 'googletagmanager.com',
+                'gstatic.com', 'googlevideo.com', 'ggpht.com', 'googleadservices.com',
+                'googleusercontent.com', 'googlesyndication.com', 'google.co.uk',
+                'google.com.au', 'google.ca', 'google.de', 'google.fr', 'google.co.in'],
+    microsoft: ['microsoft.com', 'microsoftonline.com', 'azure.com', 'live.com',
+                'outlook.com', 'office.com', 'office365.com', 'windows.com',
+                'xbox.com', 'skype.com', 'bing.com', 'msn.com', 'linkedin.com'],
+    apple:     ['apple.com', 'icloud.com', 'mzstatic.com', 'apple-cloudkit.com',
+                'cdn-apple.com', 'apple.co'],
+    facebook:  ['facebook.com', 'fb.com', 'fbcdn.net', 'fbsbx.com', 'meta.com',
+                'instagram.com', 'whatsapp.com', 'messenger.com'],
+    netflix:   ['netflix.com', 'nflxvideo.net', 'nflximg.net', 'nflxext.com'],
+    instagram: ['instagram.com', 'cdninstagram.com', 'ig.me'],
+  };
+
+  const hasBrandImpersonation = Object.entries(brandOwned).some(([brand, ownedDomains]) => {
+    // Word-boundary match in hostname
     const boundedPattern = new RegExp(`(?:^|[.-])${brand}(?:[.-]|$)`);
     if (!boundedPattern.test(hostname)) return false;
-    // Safe if the registered domain itself belongs to this brand (google.com, amazon.co.uk, etc.)
+    // Safe if hostname is or is a subdomain of a brand-owned domain
+    if (ownedDomains.some((d) => hostname === d || hostname.endsWith(`.${d}`))) return false;
+    // Safe if registered domain starts with brand name + dot (e.g. google.co.uk)
     if (registeredDomain.startsWith(`${brand}.`)) return false;
     return true;
   });
 
-  // 3. Common phishing keywords used as standalone words in the registered domain
-  //    Only checked on the registered domain (not subdomains) to avoid flagging login.google.com
-  const phishingInDomain = /(?:^|[.-])(?:login|signin|verify|secure|account|update)(?:[.-]|$)/.test(
-    registeredDomain
-  );
+  // 3. Common phishing keywords in the registered domain
+  //    Skip check for trusted institutional TLDs (.gov, .edu, .mil) — login.gov is legit
+  const isTrustedInstitution = /^(?:gov|edu|mil|ac)$/.test(tld) ||
+    /\.(?:gov|edu|mil)$/.test(registeredDomain);
+  const phishingInDomain =
+    !isTrustedInstitution &&
+    /(?:^|[.-])(?:login|signin|verify|secure|account|update)(?:[.-]|$)/.test(registeredDomain);
 
   // 4. @ symbol in the *authority* section (redirect obfuscation: https://good.com@evil.com)
-  //    The URL parser puts the part before @ into url.username, so we check that.
-  //    Path-level @ (e.g. youtube.com/@handle) is normal and must NOT be flagged.
+  //    url.username is set when @ appears before the hostname.
+  //    Path-level @ (e.g. youtube.com/@handle) is completely normal.
   const hasAtSymbol = url.username.length > 0;
 
   // 5. Multiple consecutive dashes (common in typosquatting domains)
   const hasMultipleDashes = /--/.test(hostname);
 
-  // 6. Excessive subdomain depth (more than 4 labels)
-  const hasExcessiveSubdomains = parts.length > 4;
+  // 6. Excessive subdomain depth (more than 6 labels is unusual)
+  const hasExcessiveSubdomains = parts.length > 6;
 
   const isSuspicious =
     isIPAddress ||
@@ -105,31 +128,26 @@ export function checkSuspiciousPatterns(url: URL): SecurityCheck {
 export function checkDomain(url: URL): SecurityCheck {
   const hostname = url.hostname.toLowerCase();
 
-  // List of suspicious TLDs commonly used in phishing
+  // Free / high-abuse TLDs — statistically overrepresented in phishing campaigns
+  // Note: .xyz removed — Alphabet/Google uses abc.xyz; it's now mainstream
   const suspiciousTLDs = [
-    '.tk',
-    '.ml',
-    '.ga',
-    '.cf',
-    '.gq', // Free TLDs
-    '.xyz',
-    '.top',
-    '.work',
-    '.click',
-    '.link', // Often abused
+    '.tk', '.ml', '.ga', '.cf', '.gq',   // Freenom free TLDs, massively abused
+    '.top', '.work', '.click',             // Statistically high abuse rates
   ];
 
   const hasSuspiciousTLD = suspiciousTLDs.some((tld) => hostname.endsWith(tld));
 
-  // Check for numbers in domain (often used in phishing)
-  const hasNumbersInDomain = /\d/.test(hostname.split('.')[0]);
+  // Numbers-in-domain: only flag if the entire first label is numeric
+  // (e.g. 192.evil.com) — NOT legitimate brands like 1password.com, 3m.com, mp3.com
+  const firstLabel = hostname.split('.')[0];
+  const hasNumbersInDomain = /^\d+$/.test(firstLabel);
 
-  // Check for very long domain names (> 30 chars)
-  const isVeryLong = hostname.length > 30;
+  // Very long hostnames (> 40 chars) — genuinely unusual for real sites
+  const isVeryLong = hostname.length > 40;
 
   const issues: string[] = [];
-  if (hasSuspiciousTLD) issues.push('suspicious TLD');
-  if (hasNumbersInDomain) issues.push('numbers in domain name');
+  if (hasSuspiciousTLD) issues.push('high-risk free TLD');
+  if (hasNumbersInDomain) issues.push('all-numeric subdomain label');
   if (isVeryLong) issues.push('unusually long domain');
 
   const passed = issues.length === 0;
@@ -145,35 +163,45 @@ export function checkDomain(url: URL): SecurityCheck {
 }
 
 export function analyzeDomainAge(url: URL): SecurityCheck {
-  // Mock implementation - in production, this would call a WHOIS API
-  // For demo purposes, we'll use a simple heuristic based on TLD
   const hostname = url.hostname.toLowerCase();
 
-  // Well-known domains are considered "old" and trustworthy
+  // Well-known, long-established domains
   const wellKnownDomains = [
-    'google.com',
-    'microsoft.com',
-    'apple.com',
-    'amazon.com',
-    'facebook.com',
-    'twitter.com',
-    'x.com',
-    'github.com',
-    'stackoverflow.com',
-    'youtube.com',
-    'instagram.com',
-    'linkedin.com',
-    'reddit.com',
-    'wikipedia.org',
-    'cloudflare.com',
-    'vercel.com',
-    'netlify.com',
+    // Search & productivity
+    'google.com', 'bing.com', 'yahoo.com', 'duckduckgo.com',
+    // Microsoft
+    'microsoft.com', 'microsoftonline.com', 'azure.com', 'live.com',
+    'outlook.com', 'office.com', 'windows.com', 'xbox.com', 'skype.com',
+    // Apple
+    'apple.com', 'icloud.com',
+    // Amazon / AWS
+    'amazon.com', 'amazonaws.com',
+    // Social & media
+    'facebook.com', 'meta.com', 'instagram.com', 'whatsapp.com',
+    'twitter.com', 'x.com', 'threads.net',
+    'youtube.com', 'tiktok.com', 'snapchat.com', 'pinterest.com',
+    'linkedin.com', 'reddit.com', 'tumblr.com', 'quora.com',
+    // Dev & tech
+    'github.com', 'gitlab.com', 'bitbucket.org',
+    'stackoverflow.com', 'npmjs.com', 'pypi.org',
+    'vercel.com', 'netlify.com', 'heroku.com', 'render.com',
+    'cloudflare.com', 'fastly.com', 'akamai.com',
+    'digitalocean.com', 'linode.com', 'vultr.com',
+    // Knowledge & news
+    'wikipedia.org', 'wikimedia.org',
+    'nytimes.com', 'bbc.com', 'bbc.co.uk', 'theguardian.com', 'reuters.com',
+    // Commerce & payments
+    'paypal.com', 'stripe.com', 'shopify.com', 'etsy.com', 'ebay.com',
+    // Streaming & entertainment
+    'netflix.com', 'spotify.com', 'twitch.tv', 'discord.com', 'slack.com',
+    // Security / infra
+    'letsencrypt.org', 'haveibeenpwned.com',
   ];
 
   const isWellKnown = wellKnownDomains.some((domain) => hostname.endsWith(domain));
 
-  // For demo: assume .com, .org, .edu are older; newer TLDs are younger
-  const establishedTLDs = ['.com', '.org', '.edu', '.gov', '.net'];
+  // Established TLDs correlate with older registrations
+  const establishedTLDs = ['.com', '.org', '.edu', '.gov', '.net', '.co.uk', '.ac.uk', '.mil'];
   const hasEstablishedTLD = establishedTLDs.some((tld) => hostname.endsWith(tld));
 
   const passed = isWellKnown || hasEstablishedTLD;
@@ -192,7 +220,8 @@ export function analyzeDomainAge(url: URL): SecurityCheck {
 
 export function checkURLLength(url: URL): SecurityCheck {
   const urlLength = url.href.length;
-  const isSuspiciouslyLong = urlLength > 200;
+  // 250 chars allows for normal query strings, social media paths, etc.
+  const isSuspiciouslyLong = urlLength > 250;
 
   return {
     name: 'URL Length',

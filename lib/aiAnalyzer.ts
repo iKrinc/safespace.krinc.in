@@ -18,7 +18,7 @@ function buildPrompt(
   const failed = checks.filter((c) => !c.passed);
   const passed = checks.filter((c) => c.passed);
 
-  return `You are a cybersecurity analyst. Analyze this URL for threats.
+  return `You are a cybersecurity analyst reviewing a URL scan result. Use your own knowledge of the internet to give an accurate assessment — do NOT just echo the automated check results.
 
 URL: ${url}
 Safety Score: ${score}/100
@@ -30,10 +30,14 @@ Respond ONLY with valid JSON in exactly this format:
 {"explanation":"2-3 sentence threat assessment for a non-technical user","threats":["specific threat 1","specific threat 2"],"recommendation":"one clear action the user should take"}
 
 Rules:
-- If SAFE: explain why it appears trustworthy, mention what checks passed
-- If SUSPICIOUS or DANGEROUS: describe specific risks clearly and concisely
-- threats array: max 4 items, each under 80 chars, empty array if SAFE with no concerns
-- Do not repeat check names verbatim — synthesize the meaning`;
+- Use your own knowledge first: if the domain is clearly a major legitimate platform (YouTube, Google, GitHub, Microsoft, Apple, Reddit, etc.), say so explicitly even if automated checks flagged something
+- YouTube handles like youtube.com/@username are completely normal — NOT phishing
+- @ in a URL path is normal for social media handles; only @ before the hostname is a phishing trick
+- google-analytics.com, googleapis.com, microsoftonline.com, etc. are official brand domains — not impersonation
+- If SAFE: explain why it appears trustworthy, highlight passed checks
+- If SUSPICIOUS or DANGEROUS: describe the specific realistic risk, not hypothetical worst-case scenarios
+- threats array: max 4 items, each under 80 chars; empty array [] if SAFE or no real threat
+- Do not repeat check names verbatim — synthesize the meaning for a non-technical person`;
 }
 
 function parseAIResponse(content: string, powered: AIInsights['powered']): AIInsights {
