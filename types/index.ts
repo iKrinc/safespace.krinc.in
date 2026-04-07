@@ -77,7 +77,9 @@ export type DeepScanStage =
 /** A single event captured by the behavioral monitoring iframe script. */
 export interface BehaviorEvent {
   /** Event type */
-  t: 'timeout' | 'interval' | 'popup' | 'redirect' | 'fetch' | 'xhr' | 'docwrite' | 'iframe' | 'scriptinject';
+  t: 'timeout' | 'timeout_fired' | 'interval' | 'popup' | 'redirect' |
+     'fetch' | 'xhr' | 'docwrite' | 'iframe' | 'scriptinject' |
+     'inlineScriptInject' | 'eval' | 'newFunction' | 'createElement' | 'cookieWrite';
   /** Delay in ms (for timers) */
   d?: number;
   /** URL or destination */

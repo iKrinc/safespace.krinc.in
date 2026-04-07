@@ -50,22 +50,55 @@ function severityOf(events: BehaviorEvent[]): 'none' | 'low' | 'medium' | 'high'
 
 function describeEvent(ev: BehaviorEvent): string {
   switch (ev.t) {
-    case 'timeout':  return `setTimeout fired${ev.d ? ` after ${ev.d}ms` : ''}`;
-    case 'interval': return `setInterval registered${ev.d ? ` every ${ev.d}ms` : ''}`;
-    case 'redirect': return `redirect attempt → ${ev.u || '(unknown)'}`;
-    case 'popup':    return `window.open() → ${ev.u || '(new window)'}`;
-    case 'fetch':    return `fetch() → ${ev.u || '(unknown)'}`;
-    case 'xhr':      return `XHR ${ev.m || 'GET'} → ${ev.u || '(unknown)'}`;
-    case 'iframe':   return `iframe injected${ev.h ? ' [hidden]' : ''} — ${ev.u || '(no src)'}`;
-    case 'scriptinject': return `script injected → ${ev.u || '(unknown)'}`;
-    case 'docwrite': return `document.write() called`;
-    default:         return JSON.stringify(ev);
+    case 'timeout':
+      return `setTimeout scheduled${ev.d ? ` — fires after ${ev.d}ms` : ''}`;
+    case 'timeout_fired':
+      return `setTimeout executed${ev.d ? ` (was delayed ${ev.d}ms)` : ''} — code ran after delay`;
+    case 'interval':
+      return `setInterval registered${ev.d ? ` — repeats every ${ev.d}ms` : ''}`;
+    case 'redirect':
+      return `redirect attempt [${ev.m || 'location'}] → ${ev.u || '(unknown)'}`;
+    case 'popup':
+      return `window.open() → ${ev.u || '(new window)'} [blocked]`;
+    case 'fetch':
+      return `fetch() → ${ev.u || '(unknown)'}`;
+    case 'xhr':
+      return `XHR ${ev.m || 'GET'} → ${ev.u || '(unknown)'}`;
+    case 'iframe':
+      return `iframe injected${ev.h ? ' [HIDDEN]' : ''} — ${ev.u || '(no src)'}`;
+    case 'scriptinject':
+      return `external script injected → ${ev.u || '(unknown)'}`;
+    case 'inlineScriptInject':
+      return `inline script block injected: ${ev.s || '(empty)'}`;
+    case 'docwrite':
+      return `document.write(): ${ev.s || '(empty)'}`;
+    case 'eval':
+      return `eval() executed: ${ev.s || '(empty)'}`;
+    case 'newFunction':
+      return `new Function() constructed: ${ev.s || '(empty)'}`;
+    case 'createElement':
+      return `createElement('${ev.u || ev.t}') called dynamically`;
+    case 'cookieWrite':
+      return `cookie written: ${ev.s || '(empty)'}`;
+    default:
+      return `${ev.t}${ev.u ? ' → ' + ev.u : ''}`;
   }
 }
 
 function evSeverity(ev: BehaviorEvent): 'high' | 'medium' | 'low' {
-  if (ev.t === 'redirect' || (ev.t === 'iframe' && ev.h)) return 'high';
-  if (ev.t === 'popup' || ev.t === 'scriptinject' || ev.t === 'docwrite') return 'medium';
+  if (
+    ev.t === 'redirect' ||
+    (ev.t === 'iframe' && ev.h) ||
+    ev.t === 'eval' ||
+    ev.t === 'newFunction' ||
+    ev.t === 'inlineScriptInject'
+  ) return 'high';
+  if (
+    ev.t === 'popup' ||
+    ev.t === 'scriptinject' ||
+    ev.t === 'docwrite' ||
+    ev.t === 'timeout_fired'
+  ) return 'medium';
   return 'low';
 }
 

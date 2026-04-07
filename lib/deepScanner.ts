@@ -133,6 +133,30 @@ const RULES: Rule[] = [
     severity: 'low',
     description: 'Captures keyboard input — may harvest passwords or card numbers.',
   },
+  {
+    re: /new\s+Function\s*\(/g,
+    label: 'new Function()',
+    severity: 'high',
+    description: 'Constructs and executes code from a string at runtime — same risk as eval().',
+  },
+  {
+    re: /\.innerHTML\s*[+]?=\s*(?:.*<script|.*<iframe)/gi,
+    label: 'innerHTML injection',
+    severity: 'high',
+    description: 'Injects a script or iframe element via innerHTML — common in XSS and phishing kits.',
+  },
+  {
+    re: /document\.cookie\s*=/g,
+    label: 'cookie manipulation',
+    severity: 'medium',
+    description: 'Writes to document.cookie — may set session-hijack tokens or tracking identifiers.',
+  },
+  {
+    re: /localStorage\.(?:setItem|clear)|sessionStorage\.(?:setItem|clear)/g,
+    label: 'storage write',
+    severity: 'low',
+    description: 'Writes to browser storage — may persist tracking data across sessions.',
+  },
 ];
 
 export function analyzeScripts(scripts: string[]): ScriptFinding[] {

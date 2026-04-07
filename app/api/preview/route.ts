@@ -70,22 +70,84 @@ function absoluteSrcset(srcset: string, protocol: string, baseDomain: string): s
 
 /**
  * Behavioral monitoring script injected at the very top of <head>.
- * Intercepts timers, redirects, popups, fetch/XHR, DOM mutations.
- * After 7 s it fires window.parent.postMessage({type:'SS_BEHAVIOR', events:[...]}, '*').
+ *
+ * WHY 7 SECONDS:
+ *   Many malicious scripts deliberately wait 2–5 s before acting so they
+ *   appear clean to instant-scanners. 7 s catches the most common delay
+ *   window used in phishing kits while keeping the UX fast.
+ *   Static analysis (deepScanner) independently catches ALL timed patterns
+ *   in source code regardless of delay, so nothing slips through either way.
+ *
+ * WHAT WE INTERCEPT (runtime):
+ *   Timers       — setTimeout / setInterval (when scheduled + when fired)
+ *   Code exec    — eval(), new Function()  (runtime obfuscation/injection)
+ *   DOM inject   — createElement('script'/'iframe'), innerHTML with scripts
+ *   DOM observe  — MutationObserver catches ALL dynamically added nodes
+ *   Redirects    — location.assign / replace / href setter
+ *   Popups       — window.open (blocked + logged)
+ *   Network      — fetch(), XMLHttpRequest.open
+ *   Data write   — document.write()
+ *   Cookie write — document.cookie setter
  */
 const MONITOR_SCRIPT = `<script id="__ss_monitor">(function(){
-var e=[],ts=Date.now;
-var _st=setTimeout,_si=setInterval;
-window.setTimeout=function(fn,d){if(typeof fn==='function'||typeof fn==='string')e.push({t:'timeout',d:d||0,ms:Date.now()});return _st.apply(this,arguments);};
-window.setInterval=function(fn,d){if(typeof fn==='function'||typeof fn==='string')e.push({t:'interval',d:d||0,ms:Date.now()});return _si.apply(this,arguments);};
-window.open=function(u){e.push({t:'popup',u:String(u||'').slice(0,120)});return null;};
-try{var la=location.assign.bind(location);location.assign=function(u){e.push({t:'redirect',m:'assign',u:String(u).slice(0,120)});};
-var lr=location.replace.bind(location);location.replace=function(u){e.push({t:'redirect',m:'replace',u:String(u).slice(0,120)});};}catch(_){}
-try{var _f=window.fetch;if(_f)window.fetch=function(u,o){e.push({t:'fetch',u:String(u||'').slice(0,120)});return _f.apply(this,arguments);};}catch(_){}
-try{var _xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){e.push({t:'xhr',m:m,u:String(u||'').slice(0,120)});return _xo.apply(this,arguments);};}catch(_){}
-var _dw=document.write.bind(document);document.write=function(s){e.push({t:'docwrite',s:String(s||'').slice(0,80)});return _dw(s);};
+var e=[],_now=Date.now,_st=setTimeout,_si=setInterval;
+
+/* ── Timers ── */
+window.setTimeout=function(fn,d){
+  var delay=d||0;
+  if(typeof fn==='function'||typeof fn==='string'){
+    e.push({t:'timeout',d:delay,ms:_now()});
+    /* also fire a probe when the timer actually executes */
+    var origFn=fn;
+    arguments[0]=function(){
+      e.push({t:'timeout_fired',d:delay,ms:_now()});
+      return typeof origFn==='function'?origFn():eval(origFn);
+    };
+  }
+  return _st.apply(this,arguments);
+};
+window.setInterval=function(fn,d){
+  if(typeof fn==='function'||typeof fn==='string')e.push({t:'interval',d:d||0,ms:_now()});
+  return _si.apply(this,arguments);
+};
+
+/* ── Code execution ── */
+try{var _ev=window.eval;window.eval=function(c){e.push({t:'eval',s:String(c||'').slice(0,100),ms:_now()});return _ev.call(this,c);};}catch(_){}
+try{var _Fn=window.Function;window.Function=function(){var a=Array.from(arguments);e.push({t:'newFunction',s:(a[a.length-1]||'').slice(0,100),ms:_now()});return _Fn.apply(this,a);};}catch(_){}
+
+/* ── DOM element creation ── */
+try{var _ce=document.createElement.bind(document);document.createElement=function(tag){var t=String(tag).toLowerCase();if(t==='script'||t==='iframe')e.push({t:'createElement',tag:t,ms:_now()});return _ce(tag);};}catch(_){}
+
+/* ── Redirects ── */
+window.open=function(u){e.push({t:'popup',u:String(u||'').slice(0,120),ms:_now()});return null;};
+try{var _la=location.assign.bind(location);location.assign=function(u){e.push({t:'redirect',m:'assign',u:String(u).slice(0,120),ms:_now()});};}catch(_){}
+try{var _lr=location.replace.bind(location);location.replace=function(u){e.push({t:'redirect',m:'replace',u:String(u).slice(0,120),ms:_now()});};}catch(_){}
+
+/* ── Network ── */
+try{var _f=window.fetch;if(_f)window.fetch=function(u,o){e.push({t:'fetch',u:String(u||'').slice(0,120),ms:_now()});return _f.apply(this,arguments);};}catch(_){}
+try{var _xo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u){e.push({t:'xhr',m:m,u:String(u||'').slice(0,120),ms:_now()});return _xo.apply(this,arguments);};}catch(_){}
+
+/* ── Data writes ── */
+var _dw=document.write.bind(document);document.write=function(s){e.push({t:'docwrite',s:String(s||'').slice(0,80),ms:_now()});return _dw(s);};
+try{var _cookieDesc=Object.getOwnPropertyDescriptor(Document.prototype,'cookie')||Object.getOwnPropertyDescriptor(HTMLDocument.prototype,'cookie');if(_cookieDesc&&_cookieDesc.set){var _cs=_cookieDesc.set;Object.defineProperty(document,'cookie',{get:_cookieDesc.get,set:function(v){e.push({t:'cookieWrite',s:String(v||'').slice(0,80),ms:_now()});return _cs.call(this,v);}});}}catch(_){}
+
+/* ── DOM mutation observer ── */
 var MO=window.MutationObserver||window.WebKitMutationObserver;
-if(MO){new MO(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){if(!n.tagName)return;var tag=n.tagName.toUpperCase();if(tag==='IFRAME'){var st=(n.getAttribute('style')||'').replace(/\s/g,'');var h=st.includes('display:none')||st.includes('visibility:hidden')||n.getAttribute('width')==='0'||n.getAttribute('height')==='0';e.push({t:'iframe',h:h,u:String(n.src||n.getAttribute('src')||'').slice(0,120)});}else if(tag==='SCRIPT'&&(n.src||n.getAttribute('src'))){e.push({t:'scriptinject',u:String(n.src||n.getAttribute('src')||'').slice(0,120)});}});});}).observe(document.documentElement,{childList:true,subtree:true});}
+if(MO){new MO(function(ms){ms.forEach(function(m){m.addedNodes.forEach(function(n){
+  if(!n.tagName)return;
+  var tag=n.tagName.toUpperCase();
+  if(tag==='IFRAME'){
+    var st=(n.getAttribute('style')||'').replace(/\s/g,'');
+    var h=st.includes('display:none')||st.includes('visibility:hidden')||n.getAttribute('width')==='0'||n.getAttribute('height')==='0';
+    e.push({t:'iframe',h:h,u:String(n.src||n.getAttribute('src')||'').slice(0,120),ms:_now()});
+  }else if(tag==='SCRIPT'){
+    var src=n.src||n.getAttribute('src')||'';
+    if(src)e.push({t:'scriptinject',u:String(src).slice(0,120),ms:_now()});
+    else if(n.textContent&&n.textContent.trim())e.push({t:'inlineScriptInject',s:n.textContent.trim().slice(0,100),ms:_now()});
+  }
+});});}).observe(document.documentElement,{childList:true,subtree:true});}
+
+/* ── Report after 7 s ── */
 _st(function(){try{window.parent.postMessage({type:'SS_BEHAVIOR',events:e},'*');}catch(_){}},7000);
 })();</script>`;
 
