@@ -11,9 +11,24 @@ interface SafePreviewProps {
   onBehaviorReport?: (events: BehaviorEvent[]) => void;
 }
 
+const RENDER_WAIT = 6000; // ms to let page JS run before revealing iframe
+const RENDER_STEPS = [
+  'fetching page content...',
+  'executing page scripts...',
+  'loading dynamic content...',
+  'rendering layout & styles...',
+  'applying animations...',
+  'loading images & fonts...',
+  'finalising render...',
+  'almost ready...',
+];
+
 export default function SafePreview({ url, canPreview, onBehaviorReport }: SafePreviewProps) {
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRendering, setIsRendering] = useState(false);
+  const [renderPct, setRenderPct] = useState(0);
+  const [renderStatus, setRenderStatus] = useState('');
   const [iframeKey, setIframeKey] = useState(0);
   const [showWarningModal, setShowWarningModal] = useState(false);
 
@@ -36,6 +51,9 @@ export default function SafePreview({ url, canPreview, onBehaviorReport }: SafeP
 
   const fetchPreview = async () => {
     setIsLoading(true);
+    setIsRendering(false);
+    setRenderPct(0);
+    setRenderStatus('');
     setPreview(null);
     try {
       const response = await fetch('/api/preview', {
@@ -44,6 +62,27 @@ export default function SafePreview({ url, canPreview, onBehaviorReport }: SafeP
         body: JSON.stringify({ url }),
       });
       const data: PreviewResponse = await response.json();
+
+      if (data.success && data.content) {
+        // HTML fetched — now let scripts render for RENDER_WAIT ms
+        setIsLoading(false);
+        setIsRendering(true);
+        setRenderPct(0);
+
+        const stepMs = RENDER_WAIT / RENDER_STEPS.length;
+        RENDER_STEPS.forEach((label, i) => {
+          setTimeout(() => {
+            setRenderStatus(label);
+            setRenderPct(Math.round(((i + 1) / RENDER_STEPS.length) * 100));
+          }, stepMs * i);
+        });
+
+        await new Promise((r) => setTimeout(r, RENDER_WAIT));
+        setIsRendering(false);
+        setPreview(data);
+        return;
+      }
+
       setPreview(data);
     } catch {
       setPreview({
@@ -199,14 +238,23 @@ export default function SafePreview({ url, canPreview, onBehaviorReport }: SafeP
 
         {/* Preview content */}
         <div className="bg-terminal-400">
-          {isLoading ? (
-            <div className="flex items-center justify-center" style={{ height: '560px' }}>
-              <div className="text-center space-y-3">
-                <div className="font-mono text-cyber-500 text-sm">
-                  <div className="mb-2 animate-pulse">[██████████{'>'}]</div>
-                  <div className="text-xs animate-pulse">loading preview...</div>
-                </div>
+          {(isLoading || isRendering) ? (
+            <div className="flex items-center justify-center flex-col gap-4" style={{ height: '660px' }}>
+              <div className="font-mono text-cyber-500 text-sm text-center space-y-3">
+                <div className="animate-pulse">[{isLoading ? '▓▓▓░░░░░░░' : '▓▓▓▓▓▓▓▓░░'}]</div>
+                <div className="text-xs text-gray-400">{isRendering ? renderStatus : 'fetching page...'}</div>
               </div>
+              {isRendering && (
+                <div className="w-48 space-y-1.5">
+                  <div className="h-1 bg-terminal-300 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-cyber-500 rounded-full transition-all duration-500"
+                      style={{ width: `${renderPct}%` }}
+                    />
+                  </div>
+                  <p className="text-center font-mono text-xs text-gray-700">{renderPct}% rendered</p>
+                </div>
+              )}
             </div>
           ) : preview?.success && preview.content ? (
             /*
@@ -221,7 +269,7 @@ export default function SafePreview({ url, canPreview, onBehaviorReport }: SafeP
               key={iframeKey}
               srcDoc={preview.content}
               className="w-full border-0 bg-white"
-              style={{ height: '560px', display: 'block' }}
+              style={{ height: '660px', display: 'block' }}
               title="Safe website preview"
               sandbox="allow-scripts allow-forms"
               referrerPolicy="no-referrer"
@@ -229,7 +277,7 @@ export default function SafePreview({ url, canPreview, onBehaviorReport }: SafeP
           ) : (
             <div
               className="flex flex-col items-center justify-center"
-              style={{ height: '560px' }}
+              style={{ height: '660px' }}
             >
               <div className="text-center space-y-3 max-w-xs px-4">
                 <div className="font-mono text-warning-500 text-xl mb-1">[!]</div>
